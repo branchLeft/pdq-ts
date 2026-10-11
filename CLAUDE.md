@@ -1,4 +1,4 @@
-# pdq-port
+# pdq-ts
 
 One responsibility: perceptual hashing (the PDQ algorithm) as a TypeScript package.
 

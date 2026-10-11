@@ -2,9 +2,10 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-// Control: the packed tarball must carry the licence and the notice.
-// Sabotage: remove NOTICE from `files` in package.json, run this, expect red.
-const REQUIRED = ['LICENSE', 'NOTICE', 'package.json'];
+// Control: the tarball carries the licence, notice and built entry; the pack
+// uses --ignore-scripts, so dist/ must already exist (build runs first).
+// Sabotage: drop NOTICE from `files`, or delete dist/: expect red.
+const REQUIRED = ['LICENSE', 'NOTICE', 'package.json', 'dist/index.js'];
 
 interface PackResult {
   files: Array<{ path: string }>;

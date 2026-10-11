@@ -1,0 +1,41 @@
+version: 2
+
+updates:
+  # JS/TS dependencies (package.json / pnpm-lock.yaml)
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    groups:
+      # Bundle routine minor/patch bumps into one weekly PR instead of
+      # opening a separate PR per package. Majors are deliberately left
+      # out of the group so each lands as its own PR for individual review.
+      npm-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+    labels:
+      - 'dependencies'
+
+  # Actions used by workflows in .github/workflows
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    groups:
+      # Same rationale as above: group minor/patch action bumps, let
+      # majors (which can change action inputs/outputs) come through
+      # individually.
+      github-actions-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+    labels:
+      - 'dependencies'
+      - 'github-actions'
