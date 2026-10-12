@@ -19,11 +19,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = path.join(HERE, 'fixtures');
 const GENERATED = path.join(FIXTURES, 'pictures');
 
-// The reference's tolerances, from its README: two hashes whose quality is
-// at least 80 are "within distance 10" of the reference's own; a distance of
-// 31 or less is its suggested starting point for "the same picture".
-const REFERENCE_TOLERANCE = 10;
-const REFERENCE_QUALITY_FLOOR = 80;
+// The reference's README: a distance of 31 or less is its suggested starting
+// point for "the same picture".
 const MATCH_DISTANCE = 31;
 
 function distance(a: Uint8Array, b: Uint8Array): number {
@@ -72,7 +69,7 @@ async function hashOf(buffer: Buffer): Promise<Uint8Array> {
 
 describe('the generated pictures', () => {
   it('are the files the manifest recorded', () => {
-    expect(manifest.pictures.length).toBe(16);
+    expect(manifest.pictures.length).toBe(17);
     for (const entry of manifest.pictures) {
       const sha = crypto.createHash('sha256').update(picture(entry.file)).digest('hex');
       expect(sha, entry.file).toBe(entry.sha256);
@@ -101,10 +98,11 @@ describe('the generated pictures', () => {
   });
 });
 
-// The reference's own correctness test, second half: images decoded by the
-// real decoder are within distance 10 of the reference's hash when its
-// quality is at least 80. Where the picture is lossless and needs no
-// shrinking the decoded pixels are the generator's, so the hash is identical.
+// Every generated picture hashes to exactly the reference's hash: its own
+// photo hasher for the JPEG and PNG files (the whole pipeline, including its
+// shrink of anything over 512 px), its core over the generator's pixels for
+// the GIF and WebP. The decoded pixels are the reference's, and the shrink is
+// the reference's own nearest-neighbour index rule, so there is no tolerance.
 describe('pdqHashOfImage against the reference, on generated pictures', () => {
   it.each(manifest.pictures)('$file', async (entry) => {
     const result = await pdqHashOfImage(picture(entry.file));
@@ -113,12 +111,14 @@ describe('pdqHashOfImage against the reference, on generated pictures', () => {
     const reference = Buffer.from(entry.referenceHex, 'hex');
     expect(mine).toHaveLength(32);
     expect(result.quality).toBe(entry.referenceQuality);
-    const exact = entry.lossless && Math.max(entry.width, entry.height) <= REFERENCE_SIDE;
-    if (exact) {
-      expect(distance(mine, reference)).toBe(0);
-    } else if (entry.referenceQuality >= REFERENCE_QUALITY_FLOOR) {
-      expect(distance(mine, reference)).toBeLessThanOrEqual(REFERENCE_TOLERANCE);
-    }
+    expect(distance(mine, reference)).toBe(0);
+  });
+
+  it('covers a shrunk picture of each kind: JPEG, PNG and noisy', () => {
+    const shrunk = manifest.pictures.filter(
+      (e) => Math.max(e.width, e.height) > REFERENCE_SIDE && e.referenceSource === 'photo-hasher',
+    );
+    expect(shrunk.map((e) => e.format).sort()).toEqual(['jpg', 'jpg', 'png']);
   });
 
   it('covers every format, a shrunk picture, a flat one and both sides of both quality marks', () => {
@@ -147,26 +147,39 @@ describe('pdqHashOfImage against the reference, on generated pictures', () => {
     }
   });
 
-  it('shrinks by a smooth filter because nearest neighbour is further from the reference', async () => {
-    const entry = entryFor('bilevel-1600x1000.png');
-    const reference = Buffer.from(entry.referenceHex, 'hex');
-    const smooth = await hashOf(picture(entry.file));
-    const { data, info } = await sharp(picture(entry.file))
-      .resize(REFERENCE_SIDE, REFERENCE_SIDE, {
-        fit: 'fill',
-        kernel: 'nearest',
-        fastShrinkOnLoad: false,
-      })
-      .toColourspace('b-w')
-      .raw({ depth: 'uchar' })
-      .toBuffer({ resolveWithObject: true });
-    const nearest = pdqFromPixels(data, info.width, info.height, 1);
-    if (nearest === null) {
-      throw new Error('nearest-neighbour shrink gave no hash');
-    }
-    expect(distance(smooth, reference)).toBeLessThanOrEqual(REFERENCE_TOLERANCE);
-    expect(distance(nearest.hash, reference)).toBeGreaterThan(REFERENCE_TOLERANCE);
-  });
+  // The reference shrinks with CImg's nearest neighbour: output pixel x reads
+  // source column floor(x * width / 512), and the same for rows. Doing exactly
+  // that over the full-resolution pixels is what pdqHashOfImage does, so a
+  // hash computed here by hand is the same, bit for bit.
+  it.each(['bilevel-1600x1000.png', 'scene-a-large-1280x960.jpg', 'texture-800x600.jpg'])(
+    'shrinks %s by the reference index rule, over the full-resolution pixels',
+    async (file) => {
+      const entry = entryFor(file);
+      const { data, info } = await sharp(picture(file))
+        .removeAlpha()
+        .toColourspace(entry.channels === 1 ? 'b-w' : 'srgb')
+        .raw({ depth: 'uchar' })
+        .toBuffer({ resolveWithObject: true });
+      const channels = info.channels === 1 ? 1 : 3;
+      const shrunk = Buffer.alloc(REFERENCE_SIDE * REFERENCE_SIDE * channels);
+      for (let y = 0; y < REFERENCE_SIDE; y += 1) {
+        const sy = Math.floor((y * info.height) / REFERENCE_SIDE);
+        for (let x = 0; x < REFERENCE_SIDE; x += 1) {
+          const sx = Math.floor((x * info.width) / REFERENCE_SIDE);
+          for (let k = 0; k < channels; k += 1) {
+            shrunk[(y * REFERENCE_SIDE + x) * channels + k] =
+              data[(sy * info.width + sx) * channels + k] ?? 0;
+          }
+        }
+      }
+      const byHand = pdqFromPixels(shrunk, REFERENCE_SIDE, REFERENCE_SIDE, channels);
+      if (byHand === null) {
+        throw new Error('hand shrink gave no hash');
+      }
+      expect(Buffer.from(byHand.hash).toString('hex')).toBe(entry.referenceHex);
+      expect(Buffer.from(await hashOf(picture(file))).toString('hex')).toBe(entry.referenceHex);
+    },
+  );
 
   it('returns the 32 raw PDQ bytes', async () => {
     const result = await pdqHashOfImage(picture('scene-a-480x360.jpg'));

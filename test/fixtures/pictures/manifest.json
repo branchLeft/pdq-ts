@@ -1,6 +1,6 @@
 {
   "generator": {
-    "file": "generate.mjs",
+    "file": "generate.ts",
     "seed": 20261011
   },
   "reference": {
@@ -61,6 +61,19 @@
       "note": "over 512 pixels, so it is shrunk before hashing",
       "referenceSource": "photo-hasher",
       "referenceHex": "04a190d4416ba4fbd27441b9a4fbd174ecbcf651f82bf81efa1ee44fc816da01",
+      "referenceQuality": 100
+    },
+    {
+      "file": "texture-800x600.jpg",
+      "format": "jpg",
+      "width": 800,
+      "height": 600,
+      "channels": 3,
+      "lossless": false,
+      "sha256": "f531ea9e9f3483e5d034959cfce289ddbfc659e6dd14d0d35929e4f8e56b6ce8",
+      "note": "over 512 pixels, strong seeded noise: the shrinking rule moves its hash by many bits",
+      "referenceSource": "photo-hasher",
+      "referenceHex": "01e0905441a9a4fb927461b9a4fbd174edbef651f82bf81eda1ea46fc896da01",
       "referenceQuality": 100
     },
     {

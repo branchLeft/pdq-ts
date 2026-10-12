@@ -18,13 +18,13 @@ What each picture is for (the generator is the single source for all of it):
                                (quality 50) copy of scene-a: the "same
                                picture" control
   scene-a-large-1280x960.jpg   over 512 px: shrunk before hashing
+  texture-800x600.jpg          over 512 px, strong seeded noise: the
+                               shrinking rule moves its hash by many bits
   scene-b-256x192.png          rings and stripes: the "unrelated" control
   scene-c-256x192.gif          eight flat colours, GIF
   scene-c-256x192.webp         the same, lossless WebP
   bilevel-1600x1000.png        one bit per pixel, error-diffused, over
-                               512 px: the case where the shrinking filter
-                               matters (nearest-neighbour is further from
-                               the reference than Lanczos)
+                               512 px: shrunk before hashing
   flat-64x64.png               one colour: quality 0
   contrast-NN-128x128.png      amplitude NN; the reference reports quality
                                0, 24, 49, 54, 77, 82, 100 for 04, 08, 12,
@@ -62,6 +62,10 @@ read, are hashed by the core over the generator's own pixels: valid because
 both are lossless and no larger than 512 px. For lossless PNGs of 512 px or
 less both are recorded, and they agree.
 
-Tolerances are the reference's (pdq/README.md): identical byte arrays give the
-identical hash; decoded images at quality >= 80 are within distance 10; a
-distance of 31 or less is its suggested starting point for "the same picture".
+Every picture here hashes to exactly the reference's hash (distance 0),
+including the ones over 512 px: the shrink is the reference's own nearest
+neighbour index rule (source column floor(x * width / 512)), over the
+full-resolution pixels. The reference's own tolerances (pdq/README.md) are
+looser: identical byte arrays give the identical hash; decoded images at
+quality >= 80 are within distance 10; a distance of 31 or less is its
+suggested starting point for "the same picture".

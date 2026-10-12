@@ -141,7 +141,8 @@ export function sceneFlatShapes(width: number, height: number): Buffer {
 
 // One channel, only 0 and 255: a Floyd-Steinberg error-diffusion dither of a
 // radial gradient with a bar pattern. Large enough to be shrunk before
-// hashing, which is where the choice of shrinking filter shows.
+// hashing: a two-level picture is the hardest case for a shrink that is not
+// the reference's own.
 export function sceneBilevel(width: number, height: number): Buffer {
   const level = new Float32Array(width * height);
   for (let y = 0; y < height; y += 1) {
@@ -261,6 +262,16 @@ export function pictures(): PictureSpec[] {
     encode: (img) => img.jpeg({ quality: 85, mozjpeg: false }),
     lossless: false,
     note: 'over 512 pixels, so it is shrunk before hashing',
+  });
+  add({
+    file: 'texture-800x600.jpg',
+    width: 800,
+    height: 600,
+    channels: 3,
+    pixels: sceneGradientShapes(800, 600, 60),
+    encode: (img) => img.jpeg({ quality: 50, mozjpeg: false }),
+    lossless: false,
+    note: 'over 512 pixels, strong seeded noise: the shrinking rule moves its hash by many bits',
   });
   add({
     file: 'scene-b-256x192.png',
