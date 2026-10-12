@@ -20,6 +20,12 @@ What each picture is for (the generator is the single source for all of it):
   scene-a-large-1280x960.jpg   over 512 px: shrunk before hashing
   texture-800x600.jpg          over 512 px, strong seeded noise: the
                                shrinking rule moves its hash by many bits
+  p3-tagged-160x120.png        rings and stripes with a Display-P3 profile
+  p3-tagged-160x120.jpg        added to the file by generate.ts (an iCCP
+                               chunk, an APP2 segment) without touching a
+                               pixel, so the stored pixels are unchanged:
+                               the reference's decoder reads no profile and
+                               hashes them as stored
   scene-b-256x192.png          rings and stripes: the "unrelated" control
   scene-c-256x192.gif          eight flat colours, GIF
   scene-c-256x192.webp         the same, lossless WebP

@@ -69,7 +69,7 @@ async function hashOf(buffer: Buffer): Promise<Uint8Array> {
 
 describe('the generated pictures', () => {
   it('are the files the manifest recorded', () => {
-    expect(manifest.pictures.length).toBe(17);
+    expect(manifest.pictures.length).toBe(19);
     for (const entry of manifest.pictures) {
       const sha = crypto.createHash('sha256').update(picture(entry.file)).digest('hex');
       expect(sha, entry.file).toBe(entry.sha256);
@@ -83,7 +83,7 @@ describe('the generated pictures', () => {
 
   it('decode, when lossless, to exactly the pixels the generator computes', async () => {
     for (const spec of pictures().filter((s) => s.lossless)) {
-      const { data, info } = await sharp(picture(spec.file))
+      const { data, info } = await sharp(picture(spec.file), { ignoreIcc: true })
         .removeAlpha()
         .toColourspace(spec.channels === 1 ? 'b-w' : 'srgb')
         .raw({ depth: 'uchar' })
@@ -249,6 +249,51 @@ describe('what is hashed', () => {
     const rgb = await sharp(data, options).png().toBuffer();
     expect(hashBytes(await pdqHashOfImage(rgba))).toEqual(hashBytes(await pdqHashOfImage(rgb)));
   });
+
+  // Neither of the reference's decoders reads a colour profile: Meta's CImg
+  // path and python-threatexchange both hash the stored pixels. A tag alone
+  // must therefore not move a hash.
+  it.each(['p3-tagged-160x120.png', 'p3-tagged-160x120.jpg'])(
+    'hashes the stored pixels of %s, not what its Display-P3 tag would make of them',
+    async (file) => {
+      const entry = entryFor(file);
+      const bytes = picture(file);
+      expect((await sharp(bytes).metadata()).icc, 'the fixture carries a profile').toBeDefined();
+      const stored = await hashOf(bytes);
+      expect(Buffer.from(stored).toString('hex')).toBe(entry.referenceHex);
+
+      // The untagged twin: the same stored pixels, no profile.
+      const spec = pictures().find((s) => s.file === file);
+      if (spec === undefined) {
+        throw new Error(`no generated picture ${file}`);
+      }
+      const pixels = await sharp(bytes, { ignoreIcc: true })
+        .removeAlpha()
+        .toColourspace('srgb')
+        .raw({ depth: 'uchar' })
+        .toBuffer();
+      const untagged = await sharp(pixels, {
+        raw: { width: spec.width, height: spec.height, channels: 3 },
+      })
+        .png()
+        .toBuffer();
+      expect(await hashOf(untagged)).toEqual(stored);
+
+      // Control: reading the pixels through the profile gives a different
+      // hash, further than the reference's own bound, so this fixture does
+      // tell stored pixels from colour-managed ones.
+      const managed = await sharp(bytes)
+        .removeAlpha()
+        .toColourspace('srgb')
+        .raw({ depth: 'uchar' })
+        .toBuffer();
+      const through = pdqFromPixels(managed, spec.width, spec.height, 3);
+      if (through === null) {
+        throw new Error('colour-managed pixels gave no hash');
+      }
+      expect(distance(through.hash, stored)).toBeGreaterThan(10);
+    },
+  );
 
   it('hashes a grey image and its RGB copy to the same hash or within two bits', async () => {
     const grey = await raw(120, 90, 1, (i) => ((i % 120) * 2 + Math.floor(i / 120)) & 255);

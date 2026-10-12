@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 import sharp, { type Sharp } from 'sharp';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,9 @@ export interface PictureSpec {
   channels: 1 | 3;
   pixels: Buffer;
   encode: (img: Sharp) => Sharp;
+  // Applied to the encoded bytes: used to add a colour profile tag without
+  // touching a pixel (an encoder that attaches a profile converts to it).
+  post?: (encoded: Buffer) => Promise<Buffer>;
   lossless: boolean;
   note?: string;
   sourceWidth?: number;
@@ -205,6 +209,58 @@ export function sceneAdapterBad(): Buffer {
   });
 }
 
+// A Display-P3 ICC profile, read back from a one-pixel picture that libvips
+// has tagged with its built-in profile.
+export async function displayP3Profile(): Promise<Buffer> {
+  const tagged = await sharp({
+    create: { width: 1, height: 1, channels: 3, background: '#808080' },
+  })
+    .withIccProfile('p3')
+    .png()
+    .toBuffer();
+  const { icc } = await sharp(tagged).metadata();
+  if (icc === undefined) {
+    throw new Error('generate: libvips gave no Display-P3 profile');
+  }
+  return icc;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const head = Buffer.alloc(4);
+  head.writeUInt32BE(data.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(zlib.crc32(body));
+  return Buffer.concat([head, body, crc]);
+}
+
+// Adds an iCCP chunk straight after IHDR (8-byte signature, then the 25-byte
+// IHDR chunk), leaving every other byte, the pixels included, as encoded.
+export function tagPng(png: Buffer, profile: Buffer): Buffer {
+  const data = Buffer.concat([
+    Buffer.from('Display P3', 'latin1'),
+    Buffer.from([0, 0]),
+    zlib.deflateSync(profile),
+  ]);
+  return Buffer.concat([png.subarray(0, 33), pngChunk('iCCP', data), png.subarray(33)]);
+}
+
+// Adds an APP2 ICC_PROFILE segment straight after SOI and any JFIF APP0.
+export function tagJpeg(jpeg: Buffer, profile: Buffer): Buffer {
+  let at0 = 2;
+  if (jpeg[2] === 0xff && jpeg[3] === 0xe0) {
+    at0 = 2 + 2 + jpeg.readUInt16BE(4);
+  }
+  const payload = Buffer.concat([
+    Buffer.from('ICC_PROFILE\0', 'latin1'),
+    Buffer.from([1, 1]),
+    profile,
+  ]);
+  const head = Buffer.from([0xff, 0xe2, 0, 0]);
+  head.writeUInt16BE(payload.length + 2, 2);
+  return Buffer.concat([jpeg.subarray(0, at0), head, payload, jpeg.subarray(at0)]);
+}
+
 // The contrast levels. The reference reports quality 0, 24, 49, 54, 77, 82
 // and 100 for them: either side of its 49 (discard) and 80 (tolerance) marks.
 export const CONTRAST_AMPLITUDES: ReadonlyArray<number> = [4, 8, 12, 13, 17, 18, 22];
@@ -272,6 +328,33 @@ export function pictures(): PictureSpec[] {
     encode: (img) => img.jpeg({ quality: 50, mozjpeg: false }),
     lossless: false,
     note: 'over 512 pixels, strong seeded noise: the shrinking rule moves its hash by many bits',
+  });
+  // The same stored pixels, tagged as Display-P3. The reference's decoder
+  // reads no profile, so its hash is of the stored pixels whatever the tag;
+  // decoding through the profile moves the hash by more than the reference's
+  // own 10-bit bound (decode.test.ts asserts that it does).
+  const tagged = sceneRingsStripes(160, 120);
+  add({
+    file: 'p3-tagged-160x120.png',
+    width: 160,
+    height: 120,
+    channels: 3,
+    pixels: tagged,
+    encode: (img) => img.png({ compressionLevel: 9 }),
+    post: async (encoded) => tagPng(encoded, await displayP3Profile()),
+    lossless: true,
+    note: 'stored pixels tagged with a Display-P3 profile: hashed as stored',
+  });
+  add({
+    file: 'p3-tagged-160x120.jpg',
+    width: 160,
+    height: 120,
+    channels: 3,
+    pixels: tagged,
+    encode: (img) => img.jpeg({ quality: 90, mozjpeg: false }),
+    post: async (encoded) => tagJpeg(encoded, await displayP3Profile()),
+    lossless: false,
+    note: 'the same stored pixels as a JPEG tagged with a Display-P3 profile',
   });
   add({
     file: 'scene-b-256x192.png',
@@ -357,7 +440,10 @@ export async function encodeFile(spec: PictureSpec): Promise<Buffer> {
   const height = spec.sourceHeight ?? spec.height;
   const raw = { raw: { width, height, channels: spec.channels } };
   const base = sharp(spec.pixels, raw);
-  return spec.encode(spec.channels === 1 ? base.toColourspace('b-w') : base).toBuffer();
+  const encoded = await spec
+    .encode(spec.channels === 1 ? base.toColourspace('b-w') : base)
+    .toBuffer();
+  return spec.post === undefined ? encoded : spec.post(encoded);
 }
 
 async function main(): Promise<void> {
@@ -371,7 +457,7 @@ async function main(): Promise<void> {
     const target = path.join(dir, spec.file);
     if (verify) {
       if (!spec.lossless) continue;
-      const { data, info } = await sharp(fs.readFileSync(target))
+      const { data, info } = await sharp(fs.readFileSync(target), { ignoreIcc: true })
         .removeAlpha()
         .toColourspace(spec.channels === 1 ? 'b-w' : 'srgb')
         .raw({ depth: 'uchar' })

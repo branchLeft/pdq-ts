@@ -77,6 +77,34 @@
       "referenceQuality": 100
     },
     {
+      "file": "p3-tagged-160x120.png",
+      "format": "png",
+      "width": 160,
+      "height": 120,
+      "channels": 3,
+      "lossless": true,
+      "sha256": "f836a233e860b16bb51a5dc118ebdb3f877addac250c430445b831c69580c51f",
+      "note": "stored pixels tagged with a Display-P3 profile: hashed as stored",
+      "referenceSource": "photo-hasher",
+      "referenceHex": "af6cf0938d84ea9b1584a2db518a1753bf9801c37f5515bb50bfd41354ff0292",
+      "referenceQuality": 100,
+      "coreOnGeneratorPixelsHex": "af6cf0938d84ea9b1584a2db518a1753bf9801c37f5515bb50bfd41354ff0292",
+      "coreOnGeneratorPixelsQuality": 100
+    },
+    {
+      "file": "p3-tagged-160x120.jpg",
+      "format": "jpg",
+      "width": 160,
+      "height": 120,
+      "channels": 3,
+      "lossless": false,
+      "sha256": "71b74c1235223932d4ea973fbefc066b0a1da691158797b4f2ab5e4f190ecc12",
+      "note": "the same stored pixels as a JPEG tagged with a Display-P3 profile",
+      "referenceSource": "photo-hasher",
+      "referenceHex": "af6cf0938d84ea9b1584a2db518a1753bf9801c37f5515bb50bfd41354ff0292",
+      "referenceQuality": 100
+    },
+    {
       "file": "scene-b-256x192.png",
       "format": "png",
       "width": 256,

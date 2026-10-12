@@ -125,10 +125,13 @@ export async function pdqHashOfImage(
     return none('decoder-unavailable');
   }
 
+  // `ignoreIcc`: an embedded colour profile is not read. Neither of the
+  // reference's decoders reads one, so a tag alone must not move a hash.
   const inputOptions: SharpOptions = {
     limitInputPixels: maxPixels,
     failOn: 'error',
     sequentialRead: true,
+    ignoreIcc: true,
   };
   try {
     // Header only, so the pixel bound is applied here by hand and a picture
@@ -148,9 +151,10 @@ export async function pdqHashOfImage(
       return none('too-small');
     }
 
-    // No orientation is applied and transparency is dropped (a pixel's
-    // colour is hashed without its alpha). The picture is decoded at full
-    // resolution and shrunk below by the reference's own index rule.
+    // The hash is of the stored pixels: no orientation is applied, no colour
+    // profile is read, and transparency is dropped (a pixel's colour is
+    // hashed without its alpha). The picture is decoded at full resolution
+    // and shrunk below by the reference's own index rule.
     const grey = meta.space === 'b-w' || meta.space === 'grey16';
     const { data, info } = await sharp(image, inputOptions)
       .removeAlpha()
