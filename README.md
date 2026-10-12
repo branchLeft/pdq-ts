@@ -28,6 +28,10 @@ BSD-3-Clause. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 | PDQ hashing algorithm and its reference notice          | Meta Platforms, Inc. and affiliates |
 | TypeScript packaging, tests, build and CI configuration | branchLeft                          |
 
+## Coverage
+
+PLACEHOLDER_COVERAGE_STATEMENT
+
 ## Status
 
 Not published. The package is marked `private` until the release step.

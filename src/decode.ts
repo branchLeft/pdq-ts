@@ -125,6 +125,13 @@ function none(reason: DecodeReason): DecodeResult {
   return { hash: null, quality: null, reason };
 }
 
+// A bound is a positive whole number. Anything else (NaN, zero, a negative, a
+// fraction, Infinity, a string) would make a comparison always true or always
+// false and quietly end the bound, so it is ignored and the default applies.
+function bound(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
 // A Uint8Array (a Buffer is one), also from another realm. The package is
 // called from plain JavaScript, where the declared type is not enforced.
 function isBytes(value: unknown): value is Uint8Array {
@@ -135,7 +142,18 @@ function isBytes(value: unknown): value is Uint8Array {
 
 // Never rejects. A value that is not a Uint8Array (null, undefined, a string,
 // a number) is `not-an-image`: it is not the bytes of anything, and a string
-// is never taken for a path to open.
+// is never taken for a path to open. An option that is not a positive whole
+// number is ignored and the default bound applies.
+
+// Where the hash is not what the reference's own photo hasher gives (each of
+// these was run against it, built from the pinned commit):
+//  - a 16-bit PNG: the tool keeps each sample's low byte, this reads the high
+//    byte, so the hashes differ;
+//  - RGBA, grey with alpha and CMYK: the tool exits with an error; this drops
+//    the alpha, converts CMYK to sRGB (libvips) and hashes the result;
+//  - an animated picture or a multi-page file: only the first frame or page;
+//  - a flat picture: quality 0 and a hash that is rounding noise (it may be
+//    all zero bits or not).
 export async function pdqHashOfImage(
   image: Uint8Array,
   options?: { maxBytes?: number; maxPixels?: number },
@@ -143,8 +161,8 @@ export async function pdqHashOfImage(
   if (!isBytes(image)) {
     return none('not-an-image');
   }
-  const maxBytes = options?.maxBytes ?? MAX_IMAGE_BYTES;
-  const maxPixels = options?.maxPixels ?? MAX_IMAGE_PIXELS;
+  const maxBytes = bound(options?.maxBytes, MAX_IMAGE_BYTES);
+  const maxPixels = bound(options?.maxPixels, MAX_IMAGE_PIXELS);
   if (image.byteLength === 0) {
     return none('empty');
   }

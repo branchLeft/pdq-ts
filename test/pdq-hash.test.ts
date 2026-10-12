@@ -93,6 +93,8 @@ describe('pdqFromPixels inputs', () => {
     ['a zero width', Buffer.alloc(100), 0, 5, 3],
     ['a fractional height', Buffer.alloc(100), 5, 5.5, 3],
     ['a buffer shorter than the dimensions say', Buffer.alloc(10), 5, 5, 3],
+    ['a buffer longer than the dimensions say', Buffer.alloc(5 * 5 * 3 + 1), 5, 5, 3],
+    ['four-channel bytes given as three channels', Buffer.alloc(5 * 5 * 4), 5, 5, 3],
   ])('rejects %s', (_name, pixels, width, height, channels) => {
     expect(() =>
       Reflect.apply(pdqFromPixels, undefined, [pixels, width, height, channels]),

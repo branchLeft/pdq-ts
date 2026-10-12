@@ -32,8 +32,10 @@ function pixelSpecFor(name: string) {
 }
 
 describe('pdqDihedralFromPixels against the C++ reference, on identical byte arrays', () => {
-  it('covers all 28 cases', () => {
-    expect(dihedralManifest.cases).toHaveLength(28);
+  it('covers every pixel case, in the same order', () => {
+    expect(dihedralManifest.cases.map((c) => c.name)).toEqual(
+      pixelManifest.pixelCases.map((c) => c.name),
+    );
   });
 
   it.each(dihedralManifest.cases)('$name: all eight variants and quality', (c) => {

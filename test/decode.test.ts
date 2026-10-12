@@ -295,6 +295,30 @@ describe('what is hashed', () => {
     },
   );
 
+  it('hashes the first frame of an animated picture, as the doc comment says', async () => {
+    const width = 64;
+    const height = 48;
+    const first = Buffer.alloc(width * height * 3, 40);
+    const second = Buffer.from(
+      pictures().find((s) => s.file === 'scene-b-256x192.png')?.pixels ?? [],
+    );
+    expect(second.length).toBeGreaterThan(0);
+    const resized = await sharp(second, { raw: { width: 256, height: 192, channels: 3 } })
+      .resize(width, height, { fit: 'fill' })
+      .raw()
+      .toBuffer();
+    const animated = await sharp(Buffer.concat([first, resized]), {
+      raw: { width, height: height * 2, channels: 3, pageHeight: height },
+    })
+      .gif({ delay: [100, 100], loop: 0 })
+      .toBuffer();
+    expect((await sharp(animated, { pages: -1 }).metadata()).pages).toBe(2);
+    const onlyFirst = await sharp(first, { raw: { width, height, channels: 3 } })
+      .gif()
+      .toBuffer();
+    expect(await hashOf(animated)).toEqual(await hashOf(onlyFirst));
+  });
+
   it('hashes a grey image and its RGB copy to the same hash or within two bits', async () => {
     const grey = await raw(120, 90, 1, (i) => ((i % 120) * 2 + Math.floor(i / 120)) & 255);
     const rgb = Buffer.alloc(120 * 90 * 3);
@@ -409,6 +433,24 @@ describe('bytes that are not a hashable image yield no hash', () => {
       hash: null,
       reason: 'too-large',
     });
+  });
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['zero', 0],
+    ['a negative', -1],
+    ['a fraction', 1.5],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['a string', '10'],
+    ['null', null],
+  ])('a bound that is %s is ignored: the default applies, never no bound', async (_n, value) => {
+    const png = fixture('clean.png');
+    const bad = { maxBytes: value, maxPixels: value } as never;
+    expect((await pdqHashOfImage(png, bad)).reason).toBeNull();
+    // Only the bound the caller gave validly is kept.
+    expect(
+      await pdqHashOfImage(png, { maxBytes: png.length - 1, maxPixels: value } as never),
+    ).toMatchObject({ hash: null, reason: 'too-large' });
   });
 
   it('a huge canvas under both bounds is hashed by shrinking it, not by holding it whole', async () => {

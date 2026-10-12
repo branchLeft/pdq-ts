@@ -41,6 +41,13 @@ export function syntheticPixels({ width, height, channels, seed, kind }: PixelSp
     pixels.fill(seed & 255);
     return pixels;
   }
+  if (kind === 'noise') {
+    const bytes = lcg(seed);
+    for (let i = 0; i < pixels.length; i += 1) {
+      pixels[i] = bytes();
+    }
+    return pixels;
+  }
   if (kind === 'ramp') {
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
@@ -105,6 +112,10 @@ export const PIXEL_CASES: NamedPixelSpec[] = (() => {
       seed += 1;
     }
   }
+  // Uniform noise in RGB: every colour channel's luma weight reaches the hash
+  // (a weight that is not rounded to float32 changes bits here and not in the
+  // blocky cases above).
+  cases.push({ name: 'noise-16x98x3', width: 16, height: 98, channels: 3, seed: 1, kind: 'noise' });
   // Structured content at exactly 64 x 64, where the reference's plain and
   // float paths skip the blur and its dihedral path does not.
   for (const kind of ['ramp', 'checker']) {

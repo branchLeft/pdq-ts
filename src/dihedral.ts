@@ -1,7 +1,7 @@
 // The eight dihedral variants of the PDQ 16 x 16 DCT block, each thresholded
 // on its own median. Translated from the reference's
 // pdqDihedralHash256esFromFloatLuma and the dct16OriginalTo* helpers in
-// hashing/pdqhashing.cpp (see THIRD-PARTY-LICENSE-ThreatExchange-PDQ.txt).
+// hashing/pdqhashing.cpp (see NOTICE at the package root).
 
 import { assertInput, at, bitsToBytes, dctStageFromPixels, MIN_HASHABLE_DIM } from './pdq-hash.js';
 import type { Channels } from './pdq-hash.js';

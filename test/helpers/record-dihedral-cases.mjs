@@ -49,6 +49,11 @@ function syntheticPixels({ width, height, channels, seed, kind }) {
     pixels.fill(seed & 255);
     return pixels;
   }
+  if (kind === 'noise') {
+    const bytes = lcg(seed);
+    for (let i = 0; i < pixels.length; i += 1) pixels[i] = bytes();
+    return pixels;
+  }
   if (kind === 'ramp') {
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {

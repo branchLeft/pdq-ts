@@ -285,6 +285,16 @@
       "kind": "checker",
       "expectedHex": "1134770082555d20085d5f08772a5faaa8750aff7f20207d5520007d820028df",
       "expectedQuality": 100
+    },
+    {
+      "name": "noise-16x98x3",
+      "width": 16,
+      "height": 98,
+      "channels": 3,
+      "seed": 1,
+      "kind": "noise",
+      "expectedHex": "c0ba92d4f9f28ff7afb48cc0ba39ac573e83a252c8879d14f813c2a1cadaa872",
+      "expectedQuality": 100
     }
   ]
 }

@@ -289,8 +289,11 @@ export function assertInput(
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
     throw new RangeError('pdqFromPixels: width and height must be positive integers');
   }
-  if (pixels.length < width * height * channels) {
-    throw new RangeError('pdqFromPixels: pixel buffer is shorter than width * height * channels');
+  // Exactly the stated size: a longer buffer is as much a mistake as a
+  // shorter one (RGBA bytes given as three channels would otherwise hash,
+  // as a skewed picture, without a word).
+  if (pixels.length !== width * height * channels) {
+    throw new RangeError('pdqFromPixels: pixel buffer length must equal width * height * channels');
   }
 }
 
