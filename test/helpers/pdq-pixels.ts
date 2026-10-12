@@ -1,0 +1,134 @@
+// Deterministic pixel buffers for the PDQ port's exactness test. The same
+// function produced the inputs the C++ reference was run on (see
+// test/fixtures/README.txt), so the recorded hashes line up.
+
+export interface PixelSpec {
+  width: number;
+  height: number;
+  channels: number;
+  seed: number;
+  kind: string;
+}
+
+export interface NamedPixelSpec extends PixelSpec {
+  name: string;
+}
+
+function lcg(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state >>> 24;
+  };
+}
+
+// The two tones of the 'checker' kind, one value per channel.
+const CHECKER_TONES: ReadonlyArray<readonly [number, number, number]> = [
+  [73, 108, 172],
+  [39, 22, 218],
+];
+const CHECKER_CELL = 8;
+
+// `kind: 'blocks'` is blocky content plus low-amplitude noise, so the DCT is
+// not degenerate; `kind: 'flat'` is one value everywhere; `kind: 'ramp'` is a
+// grey ramp left to right (all channels equal); `kind: 'checker'` is a two-tone
+// checker of 8 x 8 cells. The last two are structured, noise-free content: on
+// those a blur that is skipped or applied at 64 x 64 changes the hash, which
+// noise hides.
+export function syntheticPixels({ width, height, channels, seed, kind }: PixelSpec): Buffer {
+  const pixels = Buffer.alloc(width * height * channels);
+  if (kind === 'flat') {
+    pixels.fill(seed & 255);
+    return pixels;
+  }
+  if (kind === 'noise') {
+    const bytes = lcg(seed);
+    for (let i = 0; i < pixels.length; i += 1) {
+      pixels[i] = bytes();
+    }
+    return pixels;
+  }
+  if (kind === 'ramp') {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const value = Math.floor((x * 255) / (width - 1));
+        for (let k = 0; k < channels; k += 1) {
+          pixels[(y * width + x) * channels + k] = value;
+        }
+      }
+    }
+    return pixels;
+  }
+  if (kind === 'checker') {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const tone =
+          CHECKER_TONES[(Math.floor(x / CHECKER_CELL) + Math.floor(y / CHECKER_CELL)) & 1];
+        for (let k = 0; k < channels; k += 1) {
+          pixels[(y * width + x) * channels + k] = tone?.[k] ?? 0;
+        }
+      }
+    }
+    return pixels;
+  }
+  const noise = lcg(seed);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      for (let k = 0; k < channels; k += 1) {
+        const block = (Math.floor(x / 9) * 37 + Math.floor(y / 7) * 91 + k * 50) & 255;
+        pixels[(y * width + x) * channels + k] = block ^ (noise() & 15);
+      }
+    }
+  }
+  return pixels;
+}
+
+export const PIXEL_CASES: NamedPixelSpec[] = (() => {
+  const dims: Array<[number, number]> = [
+    [5, 5],
+    [7, 9],
+    [64, 64],
+    [63, 65],
+    [100, 37],
+    [128, 128],
+    [257, 300],
+    [512, 512],
+    [300, 700],
+    [1000, 333],
+    [640, 480],
+  ];
+  const cases: NamedPixelSpec[] = [];
+  let seed = 1;
+  for (const [width, height] of dims) {
+    for (const channels of [3, 1]) {
+      cases.push({
+        name: `blocks-${width}x${height}x${channels}`,
+        width,
+        height,
+        channels,
+        seed,
+        kind: 'blocks',
+      });
+      seed += 1;
+    }
+  }
+  // Uniform noise in RGB: every colour channel's luma weight reaches the hash
+  // (a weight that is not rounded to float32 changes bits here and not in the
+  // blocky cases above).
+  cases.push({ name: 'noise-16x98x3', width: 16, height: 98, channels: 3, seed: 1, kind: 'noise' });
+  // Structured content at exactly 64 x 64, where the reference's plain and
+  // float paths skip the blur and its dihedral path does not.
+  for (const kind of ['ramp', 'checker']) {
+    for (const channels of [3, 1]) {
+      cases.push({
+        name: `${kind}-64x64x${channels}`,
+        width: 64,
+        height: 64,
+        channels,
+        seed: 0,
+        kind,
+      });
+    }
+  }
+  return cases;
+})();
