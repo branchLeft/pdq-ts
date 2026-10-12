@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@11.17.0",
-  "description": "PLACEHOLDER_PACKAGE_DESCRIPTION",
+  "description": "TypeScript port of the PDQ perceptual hash: hashes raw pixels, or image bytes with an optional decoder, to 256-bit hashes, and compares them by Hamming distance.",
   "license": "BSD-3-Clause",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
