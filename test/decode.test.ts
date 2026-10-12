@@ -345,6 +345,18 @@ describe('bytes that are not a hashable image yield no hash', () => {
     expect(result).toEqual({ hash: null, quality: null, reason });
   });
 
+  it.each([
+    ['a JPEG cut off in its data', picture('scene-a-480x360.jpg')],
+    ['a PNG cut off in its data', picture('scene-a-256x192.png')],
+  ])('%s is a picture that could not be decoded, not a non-picture', async (_name, whole) => {
+    const cut = whole.subarray(0, Math.floor(whole.length / 2));
+    expect(await pdqHashOfImage(cut)).toEqual({
+      hash: null,
+      quality: null,
+      reason: 'decode-failed',
+    });
+  });
+
   it('a picture shorter than the reference minimum has no hash', async () => {
     const tiny = await sharp({
       create: { width: 4, height: 40, channels: 3, background: '#808080' },

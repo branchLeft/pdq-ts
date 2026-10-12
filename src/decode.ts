@@ -5,7 +5,7 @@
 
 import { at, MIN_HASHABLE_DIM, pdqFromPixels } from './pdq-hash.js';
 import type sharpType from 'sharp';
-import type { SharpOptions } from 'sharp';
+import type { Metadata, SharpOptions } from 'sharp';
 
 // Bounds on what is decoded. Nothing here is a verdict: bytes over a bound
 // get no hash and are therefore never allowed on that basis.
@@ -27,12 +27,20 @@ export const REFERENCE_SIDE = 512;
 // not pictures a perceptual hash of pixels can stand for.
 const RASTER_FORMATS: ReadonlySet<string> = new Set(['jpeg', 'png', 'webp', 'gif', 'tiff', 'heif']);
 
+// Why there is no hash. Every one of them means "no hash", and none is a
+// verdict that the picture is safe. `not-an-image` is the decoder's own
+// statement that these bytes are not a raster picture, and nothing else is.
+// A decoder that is missing is `decoder-unavailable`; one that loaded and
+// then failed, or a picture it recognised and could not read to the end, is
+// `decode-failed`. A caller that releases on `not-an-image` alone must hold
+// the others.
 export type DecodeReason =
   | 'empty'
   | 'too-large'
   | 'not-an-image'
   | 'too-small'
-  | 'decoder-unavailable';
+  | 'decoder-unavailable'
+  | 'decode-failed';
 
 // `hash` is the 32 PDQ bytes, or null with a `reason` when these bytes have no
 // hash. `quality` is the reference's quality for a hash, and null when there
@@ -103,6 +111,16 @@ function nearestToSquare(
   return out;
 }
 
+// The two messages the decoder gives when it reads a header and finds no
+// picture: an unknown format, or a known signature with a header that does not
+// parse. Anything else thrown by the header read is not about the bytes.
+function isUnreadableHeader(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    /^Input buffer (contains unsupported image format|has corrupt header)/.test(err.message)
+  );
+}
+
 function none(reason: DecodeReason): DecodeResult {
   return { hash: null, quality: null, reason };
 }
@@ -133,10 +151,17 @@ export async function pdqHashOfImage(
     sequentialRead: true,
     ignoreIcc: true,
   };
+  // Header only, so the pixel bound is applied here by hand and a picture
+  // over it is told apart from bytes that are not a picture. Only the
+  // decoder saying the header is unreadable is a verdict on the bytes; any
+  // other failure here is the decoder's own and reads as `decode-failed`.
+  let meta: Metadata;
   try {
-    // Header only, so the pixel bound is applied here by hand and a picture
-    // over it is told apart from bytes that are not a picture.
-    const meta = await sharp(image, { ...inputOptions, limitInputPixels: false }).metadata();
+    meta = await sharp(image, { ...inputOptions, limitInputPixels: false }).metadata();
+  } catch (err) {
+    return none(isUnreadableHeader(err) ? 'not-an-image' : 'decode-failed');
+  }
+  try {
     if (!RASTER_FORMATS.has(meta.format ?? '')) {
       return none('not-an-image');
     }
@@ -162,7 +187,7 @@ export async function pdqHashOfImage(
       .raw({ depth: 'uchar' })
       .toBuffer({ resolveWithObject: true });
     if (info.channels !== 1 && info.channels !== 3) {
-      return none('not-an-image');
+      return none('decode-failed');
     }
 
     const shrink = info.width > REFERENCE_SIDE || info.height > REFERENCE_SIDE;
@@ -179,6 +204,7 @@ export async function pdqHashOfImage(
     }
     return { hash: result.hash, quality: result.quality, reason: null };
   } catch {
-    return none('not-an-image');
+    // The header was a picture's, and the pixels could not be had or hashed.
+    return none('decode-failed');
   }
 }
