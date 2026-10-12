@@ -125,11 +125,24 @@ function none(reason: DecodeReason): DecodeResult {
   return { hash: null, quality: null, reason };
 }
 
-// Never rejects.
+// A Uint8Array (a Buffer is one), also from another realm. The package is
+// called from plain JavaScript, where the declared type is not enforced.
+function isBytes(value: unknown): value is Uint8Array {
+  return (
+    ArrayBuffer.isView(value) && Object.prototype.toString.call(value) === '[object Uint8Array]'
+  );
+}
+
+// Never rejects. A value that is not a Uint8Array (null, undefined, a string,
+// a number) is `not-an-image`: it is not the bytes of anything, and a string
+// is never taken for a path to open.
 export async function pdqHashOfImage(
   image: Uint8Array,
   options?: { maxBytes?: number; maxPixels?: number },
 ): Promise<DecodeResult> {
+  if (!isBytes(image)) {
+    return none('not-an-image');
+  }
   const maxBytes = options?.maxBytes ?? MAX_IMAGE_BYTES;
   const maxPixels = options?.maxPixels ?? MAX_IMAGE_PIXELS;
   if (image.byteLength === 0) {

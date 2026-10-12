@@ -345,6 +345,29 @@ describe('bytes that are not a hashable image yield no hash', () => {
     expect(result).toEqual({ hash: null, quality: null, reason });
   });
 
+  // The package is called from plain JavaScript, where the declared type is
+  // not enforced. A value that is not bytes gets the typed result, never a
+  // rejection, and a string is never taken for a path to open.
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a number', 42],
+    ['a plain object', {}],
+    ['an array of byte values', [137, 80, 78, 71]],
+    ['an ArrayBuffer', new ArrayBuffer(16)],
+    ['a path to a real picture', path.join(FIXTURES, 'clean.png')],
+    ['a Buffer-like object with a byteLength', { byteLength: 16 }],
+  ])('%s is not bytes: the typed result, never a rejection', async (_name, value) => {
+    const result = await pdqHashOfImage(value as never);
+    expect(result).toEqual({ hash: null, quality: null, reason: 'not-an-image' });
+  });
+
+  it('accepts a Uint8Array and a Buffer alike', async () => {
+    const bytes = picture('scene-a-480x360.jpg');
+    const plain = new Uint8Array(bytes);
+    expect((await pdqHashOfImage(plain)).hash).toEqual((await pdqHashOfImage(bytes)).hash);
+  });
+
   it.each([
     ['a JPEG cut off in its data', picture('scene-a-480x360.jpg')],
     ['a PNG cut off in its data', picture('scene-a-256x192.png')],
