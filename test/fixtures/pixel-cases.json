@@ -245,6 +245,46 @@
       "kind": "flat",
       "expectedHex": "0000000000000000000000000000000000000000000000000000000000000000",
       "expectedQuality": 0
+    },
+    {
+      "name": "ramp-64x64x3",
+      "width": 64,
+      "height": 64,
+      "channels": 3,
+      "seed": 0,
+      "kind": "ramp",
+      "expectedHex": "d4ab6d08cd9a694265496ca8557549a32daab55a5554d9ad7552356c52d5ad5b",
+      "expectedQuality": 44
+    },
+    {
+      "name": "ramp-64x64x1",
+      "width": 64,
+      "height": 64,
+      "channels": 1,
+      "seed": 0,
+      "kind": "ramp",
+      "expectedHex": "b48b6d14c59b6ac7654564a465754935adaab54a514bd8a55293156dd655ad5b",
+      "expectedQuality": 44
+    },
+    {
+      "name": "checker-64x64x3",
+      "width": 64,
+      "height": 64,
+      "channels": 3,
+      "seed": 0,
+      "kind": "checker",
+      "expectedHex": "000055a0005fdfaa5f20552011345f805f20007d7700007d5f2202ff20750877",
+      "expectedQuality": 100
+    },
+    {
+      "name": "checker-64x64x1",
+      "width": 64,
+      "height": 64,
+      "channels": 1,
+      "seed": 0,
+      "kind": "checker",
+      "expectedHex": "1134770082555d20085d5f08772a5faaa8750aff7f20207d5520007d820028df",
+      "expectedQuality": 100
     }
   ]
 }

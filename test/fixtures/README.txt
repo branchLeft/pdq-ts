@@ -40,11 +40,20 @@ pixel arrays. Build it with the same flags and the same four reference files
     $R/pdq/cpp/downscaling/downscaling.cpp $R/pdq/cpp/common/pdqhashtypes.cpp \
     reference-dihedral-driver.cpp -o pdq-dihedral-driver
 
-Each driver output line is: quality, then the eight dihedral hashes in the
-reference's order, then 256 float values. The eight hashes, in order, are
-Original, Rotate90, Rotate180, Rotate270, FlipX, FlipY, FlipPlus1, FlipMinus1
-(the parameter order of pdqDihedralHash256esFromFloatLuma in pdqhashing.h).
-Each hash is 64 hex characters, as Hash256::format() prints it.
+Each driver output line is: the dihedral quality, then the eight dihedral
+hashes in the reference's order, then the plain hash and its quality (from
+pdqHash256FromFloatLuma), then the float path's quality, then 256 float
+values. The eight hashes, in order, are Original, Rotate90, Rotate180,
+Rotate270, FlipX, FlipY, FlipPlus1, FlipMinus1 (the parameter order of
+pdqDihedralHash256esFromFloatLuma in pdqhashing.h). Each hash is 64 hex
+characters, as Hash256::format() prints it.
+
+The three are separate reference entry points. At exactly 64 x 64 the plain
+and float ones skip the blur (pdqFloat256FromFloatLuma) and the dihedral one
+does not, so on structured content (a grey ramp, a two-tone checker) the
+dihedral Original differs from the plain hash. Seeded noise hides this: the
+64 x 64 'blocks' case gives the same hash either way. The ramp and checker
+kinds in test/helpers/pdq-pixels.ts are the cases that show it.
 
 The 256 float values are the 16x16 DCT output of pdqFloat256FromFloatLuma in
 row-major order. Each is written as 8 hex digits of its float32 bit pattern
@@ -55,10 +64,11 @@ writes dihedral-cases.json next to this file:
 
   node test/helpers/record-dihedral-cases.mjs /path/to/pdq-dihedral-driver
 
-Its control check runs first: the driver's Original hash and quality must equal
-the expected values in pixel-cases.json for all 24 cases, or nothing is written.
-dihedral-cases.json holds, per case, the quality, the dihedral object keyed by
-the eight names above (in that order), and floatBits (256 strings).
+Its control check runs first: the driver's plain hash and quality must equal
+the expected values in pixel-cases.json for all cases, or nothing is written.
+dihedral-cases.json holds, per case, the dihedral quality, the dihedral object
+keyed by the eight names above (in that order), the plain hash and quality, the
+float path's quality, and floatBits (256 strings).
 
 The reference's licence (BSD) applies to the ported algorithm and its notice
 is NOTICE at the package root. The images used elsewhere

@@ -65,7 +65,8 @@ export function pdqDihedralFromPixels(
   if (width < MIN_HASHABLE_DIM || height < MIN_HASHABLE_DIM) {
     return null;
   }
-  const { quality, block } = dctStageFromPixels(pixels, width, height, channels);
+  // The reference's dihedral entry point blurs even a 64 x 64 image.
+  const { quality, block } = dctStageFromPixels(pixels, width, height, channels, true);
   return {
     quality,
     hashes: {

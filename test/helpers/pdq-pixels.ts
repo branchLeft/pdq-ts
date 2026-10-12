@@ -22,12 +22,46 @@ function lcg(seed: number): () => number {
   };
 }
 
+// The two tones of the 'checker' kind, one value per channel.
+const CHECKER_TONES: ReadonlyArray<readonly [number, number, number]> = [
+  [73, 108, 172],
+  [39, 22, 218],
+];
+const CHECKER_CELL = 8;
+
 // `kind: 'blocks'` is blocky content plus low-amplitude noise, so the DCT is
-// not degenerate; `kind: 'flat'` is one value everywhere.
+// not degenerate; `kind: 'flat'` is one value everywhere; `kind: 'ramp'` is a
+// grey ramp left to right (all channels equal); `kind: 'checker'` is a two-tone
+// checker of 8 x 8 cells. The last two are structured, noise-free content: on
+// those a blur that is skipped or applied at 64 x 64 changes the hash, which
+// noise hides.
 export function syntheticPixels({ width, height, channels, seed, kind }: PixelSpec): Buffer {
   const pixels = Buffer.alloc(width * height * channels);
   if (kind === 'flat') {
     pixels.fill(seed & 255);
+    return pixels;
+  }
+  if (kind === 'ramp') {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const value = Math.floor((x * 255) / (width - 1));
+        for (let k = 0; k < channels; k += 1) {
+          pixels[(y * width + x) * channels + k] = value;
+        }
+      }
+    }
+    return pixels;
+  }
+  if (kind === 'checker') {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const tone =
+          CHECKER_TONES[(Math.floor(x / CHECKER_CELL) + Math.floor(y / CHECKER_CELL)) & 1];
+        for (let k = 0; k < channels; k += 1) {
+          pixels[(y * width + x) * channels + k] = tone?.[k] ?? 0;
+        }
+      }
+    }
     return pixels;
   }
   const noise = lcg(seed);
@@ -69,6 +103,20 @@ export const PIXEL_CASES: NamedPixelSpec[] = (() => {
         kind: 'blocks',
       });
       seed += 1;
+    }
+  }
+  // Structured content at exactly 64 x 64, where the reference's plain and
+  // float paths skip the blur and its dihedral path does not.
+  for (const kind of ['ramp', 'checker']) {
+    for (const channels of [3, 1]) {
+      cases.push({
+        name: `${kind}-64x64x${channels}`,
+        width: 64,
+        height: 64,
+        channels,
+        seed: 0,
+        kind,
+      });
     }
   }
   return cases;

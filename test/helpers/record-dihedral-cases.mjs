@@ -37,10 +37,35 @@ function lcg(seed) {
 
 // Mirrors syntheticPixels() in pdq-pixels.ts line for line; the control check
 // at the end proves the mirror.
+const CHECKER_TONES = [
+  [73, 108, 172],
+  [39, 22, 218],
+];
+const CHECKER_CELL = 8;
+
 function syntheticPixels({ width, height, channels, seed, kind }) {
   const pixels = Buffer.alloc(width * height * channels);
   if (kind === 'flat') {
     pixels.fill(seed & 255);
+    return pixels;
+  }
+  if (kind === 'ramp') {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const value = Math.floor((x * 255) / (width - 1));
+        for (let k = 0; k < channels; k += 1) pixels[(y * width + x) * channels + k] = value;
+      }
+    }
+    return pixels;
+  }
+  if (kind === 'checker') {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const tone =
+          CHECKER_TONES[(Math.floor(x / CHECKER_CELL) + Math.floor(y / CHECKER_CELL)) & 1];
+        for (let k = 0; k < channels; k += 1) pixels[(y * width + x) * channels + k] = tone[k];
+      }
+    }
     return pixels;
   }
   const noise = lcg(seed);
@@ -76,7 +101,10 @@ const records = cases.map((c, i) => {
   const tokens = lines[i].trim().split(' ');
   const quality = Number(tokens[0]);
   const hashes = tokens.slice(1, 9);
-  const floatBits = tokens.slice(9);
+  const plainHash = tokens[9];
+  const plainQuality = Number(tokens[10]);
+  const floatQuality = Number(tokens[11]);
+  const floatBits = tokens.slice(12);
   if (hashes.length !== 8 || floatBits.length !== 256) {
     throw new Error(`case ${c.name}: expected 8 hashes and 256 floats`);
   }
@@ -84,18 +112,22 @@ const records = cases.map((c, i) => {
     name: c.name,
     quality,
     dihedral: Object.fromEntries(DIHEDRAL_ORDER.map((label, k) => [label, hashes[k]])),
+    plain: { hash: plainHash, quality: plainQuality },
+    floatQuality,
     floatBits,
   };
 });
 
-// Control: the build is right only if Original and quality match the expected
-// values already recorded in pixel-cases.json for all cases.
+// Control: the build is right only if the plain hash and its quality match the
+// expected values already recorded in pixel-cases.json for all cases. (The
+// dihedral Original is not the control: at exactly 64 x 64 the reference's
+// dihedral path blurs where its plain path does not, so the two can differ.)
 let matched = 0;
 cases.forEach((c, i) => {
   const rec = records[i];
-  const ok = rec.dihedral.Original === c.expectedHex && rec.quality === c.expectedQuality;
+  const ok = rec.plain.hash === c.expectedHex && rec.plain.quality === c.expectedQuality;
   if (ok) matched += 1;
-  else console.error(`MISMATCH ${c.name}: ${rec.dihedral.Original} q=${rec.quality}`);
+  else console.error(`MISMATCH ${c.name}: ${rec.plain.hash} q=${rec.plain.quality}`);
 });
 console.log(`control: ${matched} of ${cases.length} cases match expected hash and quality`);
 if (matched !== cases.length) {
@@ -105,7 +137,7 @@ if (matched !== cases.length) {
 
 const out = {
   source: manifest.source,
-  note: 'Dihedral hashes and float DCT output printed by the reference (pdqDihedralHash256esFromFloatLuma, pdqFloat256FromFloatLuma) over the byte arrays of pixel-cases.json. floatBits are float32 bit patterns as 8 hex digits, row-major 16x16.',
+  note: 'Dihedral hashes, plain hash and float DCT output printed by the reference (pdqDihedralHash256esFromFloatLuma, pdqHash256FromFloatLuma, pdqFloat256FromFloatLuma) over the byte arrays of pixel-cases.json. quality is the dihedral path quality, plain the plain path hash and quality, floatQuality the float path quality: at exactly 64 x 64 the plain and float paths skip the blur and the dihedral path does not. floatBits are float32 bit patterns as 8 hex digits, row-major 16x16.',
   dihedralOrder: DIHEDRAL_ORDER,
   cases: records,
 };

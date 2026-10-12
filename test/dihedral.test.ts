@@ -32,8 +32,8 @@ function pixelSpecFor(name: string) {
 }
 
 describe('pdqDihedralFromPixels against the C++ reference, on identical byte arrays', () => {
-  it('covers all 24 cases', () => {
-    expect(dihedralManifest.cases).toHaveLength(24);
+  it('covers all 28 cases', () => {
+    expect(dihedralManifest.cases).toHaveLength(28);
   });
 
   it.each(dihedralManifest.cases)('$name: all eight variants and quality', (c) => {
@@ -57,19 +57,54 @@ describe('pdqDihedralFromPixels against the C++ reference, on identical byte arr
     expect(Buffer.from(result.hashes.flipMinus1).toString('hex')).toBe(c.dihedral.FlipMinus1);
   });
 
-  it.each(dihedralManifest.cases)('$name: original equals the plain hash', (c) => {
-    const spec = pixelSpecFor(c.name);
-    const pixels = syntheticPixels(spec);
-    const channels = channelsOf(spec.channels);
-    const dihedral = mustDihedral(pdqDihedralFromPixels(pixels, spec.width, spec.height, channels));
-    const plain = pdqFromPixels(pixels, spec.width, spec.height, channels);
-    if (plain === null) {
-      throw new Error('expected a plain hash, got null');
-    }
-    expect(dihedral.hashes.original).toHaveLength(HASH_BYTES);
-    expect(Buffer.from(dihedral.hashes.original).equals(Buffer.from(plain.hash))).toBe(true);
-    expect(dihedral.quality).toBe(plain.quality);
-  });
+  // The reference has three entry points and they are not one function: at
+  // exactly 64 x 64 its plain and float paths skip the blur and its dihedral
+  // path never does. So "the original variant is the plain hash" holds only
+  // where the reference's own recorded values say it does.
+  it.each(dihedralManifest.cases)(
+    '$name: original is the plain hash exactly as the reference has it',
+    (c) => {
+      const spec = pixelSpecFor(c.name);
+      const pixels = syntheticPixels(spec);
+      const channels = channelsOf(spec.channels);
+      const dihedral = mustDihedral(
+        pdqDihedralFromPixels(pixels, spec.width, spec.height, channels),
+      );
+      const plain = pdqFromPixels(pixels, spec.width, spec.height, channels);
+      if (plain === null) {
+        throw new Error('expected a plain hash, got null');
+      }
+      expect(Buffer.from(plain.hash).toString('hex')).toBe(c.plain.hash);
+      expect(plain.quality).toBe(c.plain.quality);
+      expect(dihedral.hashes.original).toHaveLength(HASH_BYTES);
+      expect(Buffer.from(dihedral.hashes.original).equals(Buffer.from(plain.hash))).toBe(
+        c.dihedral.Original === c.plain.hash,
+      );
+    },
+  );
+
+  // Structured 64 x 64 content, where the blur's float rounding reaches the
+  // hash (seeded noise hides it, which is why the noise cases never showed
+  // it): the reference's dihedral original differs from its plain hash, and
+  // so must this port's.
+  it.each(['ramp-64x64x3', 'checker-64x64x3'])(
+    '%s: the dihedral path blurs a 64 x 64 picture and the plain path does not',
+    (name) => {
+      const c = dihedralManifest.cases.find((x) => x.name === name);
+      if (c === undefined) {
+        throw new Error(`no dihedral case named ${name}`);
+      }
+      expect(c.dihedral.Original, 'the reference itself differs here').not.toBe(c.plain.hash);
+      const spec = pixelSpecFor(name);
+      const pixels = syntheticPixels(spec);
+      const dihedral = mustDihedral(
+        pdqDihedralFromPixels(pixels, 64, 64, channelsOf(spec.channels)),
+      );
+      const plain = pdqFromPixels(pixels, 64, 64, channelsOf(spec.channels));
+      expect(Buffer.from(dihedral.hashes.original).toString('hex')).toBe(c.dihedral.Original);
+      expect(Buffer.from(plain?.hash ?? []).toString('hex')).toBe(c.plain.hash);
+    },
+  );
 });
 
 describe('pdqDihedralFromPixels inputs', () => {

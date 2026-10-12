@@ -1,9 +1,13 @@
-// Runs the reference's dihedral and float-output functions over raw pixel buffers
-// (see README.txt). Input on stdin per record: "W H C\n" then W*H*C raw bytes.
-// Output per record, one line: "quality" then the eight dihedral hashes in the
-// reference's order (Original, Rotate90, Rotate180, Rotate270, FlipX, FlipY,
-// FlipPlus1, FlipMinus1, hex), then the 256 float DCT values of the 16x16 output
-// in row-major order, each as the 8 hex digits of its float32 bit pattern.
+// Runs the reference's dihedral, plain-hash and float-output functions over raw
+// pixel buffers (see README.txt). Input on stdin per record: "W H C\n" then
+// W*H*C raw bytes. Output per record, one line: the dihedral quality, then the
+// eight dihedral hashes in the reference's order (Original, Rotate90,
+// Rotate180, Rotate270, FlipX, FlipY, FlipPlus1, FlipMinus1, hex), then the
+// plain hash (hex) and its quality, then the float path's quality, then the
+// 256 float DCT values of the 16x16 output in row-major order, each as the 8
+// hex digits of its float32 bit pattern. The three functions are separate
+// reference entry points: at exactly 64 x 64 the plain and float ones skip the
+// blur and the dihedral one does not, so their qualities and hashes can differ.
 #include <pdq/cpp/common/pdqhashtypes.h>
 #include <pdq/cpp/downscaling/downscaling.h>
 #include <pdq/cpp/hashing/pdqhashing.h>
@@ -48,11 +52,20 @@ int main() {
            h180.format().c_str(), h270.format().c_str(), hFX.format().c_str(),
            hFY.format().c_str(), hP1.format().c_str(), hM1.format().c_str());
 
+    // Plain hash: fresh luma again.
+    fillLuma(px, w, h, c, b1.data());
+    hashing::Hash256 hPlain;
+    int qualityPlain = 0;
+    hashing::pdqHash256FromFloatLuma(b1.data(), b2.data(), h, w, b64, b1664, b1616, hPlain,
+                                     qualityPlain);
+    printf(" %s %d", hPlain.format().c_str(), qualityPlain);
+
     // Float DCT output: fresh luma again, then the 16x16 float buffer.
     fillLuma(px, w, h, c, b1.data());
     float out1616[16][16];
     int qualityF = 0;
     hashing::pdqFloat256FromFloatLuma(b1.data(), b2.data(), h, w, b64, b1664, out1616, qualityF);
+    printf(" %d", qualityF);
     for (int i = 0; i < 16; i++) {
       for (int j = 0; j < 16; j++) {
         uint32_t bits;

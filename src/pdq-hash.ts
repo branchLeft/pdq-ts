@@ -312,16 +312,21 @@ export function pdqFromPixels(
 // the package barrel). Inputs are already validated and at least the minimum
 // side long. Returns the quality and the 16 x 16 DCT block, row-major, before
 // thresholding.
+//
+// The reference's plain-hash and float entry points skip the blur for an image
+// already 64 x 64 (pdqFloat256FromFloatLuma); its dihedral entry point has no
+// such shortcut and always blurs. The blur there is a window of one, which is
+// not an identity in float32, so `blurAt64` says which entry point this is.
 export function dctStageFromPixels(
   pixels: Uint8Array,
   width: number,
   height: number,
   channels: Channels,
+  blurAt64 = false,
 ): { quality: number; block: Float32Array } {
   const luma =
     channels === 3 ? lumaFromRgb(pixels, height, width) : lumaFromGrey(pixels, height, width);
-  // An image already 64 x 64 skips the blur, as the reference does.
-  const small =
-    width === HASH_SIDE && height === HASH_SIDE ? luma : downscaleTo64(luma, height, width);
+  const skip = !blurAt64 && width === HASH_SIDE && height === HASH_SIDE;
+  const small = skip ? luma : downscaleTo64(luma, height, width);
   return { quality: qualityOf(small), block: dct64To16(small) };
 }

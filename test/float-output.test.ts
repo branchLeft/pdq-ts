@@ -42,7 +42,7 @@ describe('pdqFloatFromPixels against the C++ reference, on identical byte arrays
     const result = mustFloat(
       pdqFloatFromPixels(syntheticPixels(spec), spec.width, spec.height, channelsOf(spec.channels)),
     );
-    expect(result.quality).toBe(c.quality);
+    expect(result.quality).toBe(c.floatQuality);
     expect(result.values).toHaveLength(256);
     expect(c.floatBits).toHaveLength(256);
     for (let k = 0; k < 256; k += 1) {
