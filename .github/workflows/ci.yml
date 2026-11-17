@@ -4,6 +4,19 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Nightly: the same jobs with a longer fuzz run and a new seed.
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzz_seed:
+        description: Fuzz seed (empty means this run's id)
+        required: false
+        type: string
+      fuzz_cases:
+        description: Fuzz cases per reference build
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -48,7 +61,7 @@ jobs:
   reference:
     name: reference (${{ matrix.runner }}, ${{ matrix.cxx }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -98,11 +111,17 @@ jobs:
           CXX: ${{ matrix.cxx }}
         run: node tools/build-reference.mts --source reference --out reference-bin --cxx "$CXX" --opt=-O0 --suffix=-O0
 
+      # The fuzz seed is this run's id unless one is given, so every run tries
+      # new pictures and a rerun of the same run tries the same ones. The
+      # seed is printed, and a failure prints the command that rebuilds its
+      # one case.
       - name: Compare the port with the reference
         run: pnpm run test:reference
         env:
           CI: true
           PDQ_REFERENCE_BIN: reference-bin
+          PDQ_FUZZ_SEED: ${{ inputs.fuzz_seed || github.run_id }}
+          PDQ_FUZZ_CASES: ${{ inputs.fuzz_cases || (github.event_name == 'schedule' && '40000' || '4000') }}
 
   actionlint:
     runs-on: ubuntu-latest

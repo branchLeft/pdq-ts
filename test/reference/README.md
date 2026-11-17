@@ -28,6 +28,19 @@ PDQ_REFERENCE_BIN="$REF/bin" pnpm run test:reference
 | `reference-stages.cpp` | Runs the reference over raw pixels and writes the hash, the quality and the float32 buffers of every stage as bytes. A second mode writes luma for RGB triples. |
 | `stages.ref.ts` | For the fixed cases of `test/helpers/stage-specs.ts`: the port's 64 x 64 downsample, 16 x 64 and 16 x 16 DCT buffers, quality and hash equal the reference's bit for bit, and regenerating `test/fixtures/pdq-reference/stage-cases.json` changes nothing. |
 | `luma.ref.ts` | Luma for all 16,777,216 RGB values equals the reference's bit for bit. This stage is checked for every input that exists. |
+| `fuzz.ref.ts` | Differential fuzzing: seeded pictures from `test/helpers/fuzz-cases.ts` through the reference and the port, every stage compared bit for bit. |
+
+## Fuzzing
+
+`PDQ_FUZZ_SEED` (default 1) and `PDQ_FUZZ_CASES` (default 300) choose the run. Case `n` of a seed is a pure function of the two numbers. Shapes: sides of 5 to 9, sides under the minimum, 62 to 66, within 2 of a multiple of 64 or 128, 5 to 8 by up to 3000, and up to 4096. Content: noise, flat 0 and 255, bilevel, the extremes 0, 1, 254 and 255, near-flat, gradients, stripes, checkerboards, sparse, blocks and halves.
+
+CI runs 4,000 cases per reference build on every pull request, seeded with the run's id, and 40,000 nightly. A failure names the case, the stage, the index and both bit patterns, and prints the command that reruns that one case:
+
+```sh
+PDQ_FUZZ_SEED=<seed> PDQ_FUZZ_ONLY=<case> PDQ_REFERENCE_BIN="$REF/bin" pnpm run test:reference
+```
+
+For a side under 5 the reference returns a zero hash with quality 0 and the port returns `null`; the fuzzer checks exactly that and nothing else for those cases.
 
 ## Regenerating the recorded stages
 
