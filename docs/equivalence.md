@@ -76,6 +76,7 @@ The port calls no cosine. The matrix is 1,024 constants, generated from a build 
 | Luma | `test/reference/luma.ref.ts` | all 16,777,216 RGB values, bit for bit: every input this stage can receive |
 | Median | `test/reference/median.ref.ts` | 900 arrays of lengths 1 to 300 against the reference's routine |
 | 44 fixed pictures | `test/reference/stages.ref.ts`, `test/stages.test.ts` | every stage bit for bit; the committed expected values are regenerated from the reference and must not change |
+| The reference's own pictures | `test/reference/pictures.ref.ts` | 34 photographs from upstream `pdq/data`, decoded and shrunk by the reference's tool: the port returns the tool's hash and quality and matches every stage; the tool as built in CI reproduces the eight hashes upstream publishes |
 | Fuzzing | `test/reference/fuzz.ref.ts` | 4,000 seeded pictures per build, every stage bit for bit; 40,000 nightly; sides 1 to 4096 |
 | Engines | `test/conformance/`, the `engine` and `browsers` jobs | the same bundle on Node 22, 24 and 26, Bun, Deno, Chromium, Firefox and WebKit, x64 and arm64 |
 | Coverage | `vitest.config.mts` | 100% of statements and branches of `src/` |
