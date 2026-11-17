@@ -21,6 +21,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
+    "test:reference": "vitest run --config vitest.reference.config.mts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

@@ -9,6 +9,8 @@
 // BSD licence, reproduced in NOTICE at the root of this package. The torben
 // median routine is public domain (Torben Mogensen; N. Devillard).
 
+import { DCT_MATRIX_BITS } from './dct-table.js';
+
 export type Channels = 1 | 3;
 
 export interface PdqResult {
@@ -34,19 +36,12 @@ const LUMA_R = fround(0.299);
 const LUMA_G = fround(0.587);
 const LUMA_B = fround(0.114);
 
-// 16 x 64 matrix of the first 16 non-DC DCT-II basis rows, as the reference
-// builds it: scale in float, cosine in double, stored as float.
-const DCT_MATRIX = ((): Float32Array => {
-  const scale = fround(Math.sqrt(2.0 / HASH_SIDE));
-  const matrix = new Float32Array(DCT_SIDE * HASH_SIDE);
-  for (let i = 0; i < DCT_SIDE; i += 1) {
-    for (let j = 0; j < HASH_SIDE; j += 1) {
-      matrix[i * HASH_SIDE + j] =
-        scale * Math.cos((Math.PI / 2.0 / HASH_SIDE) * (i + 1) * (2 * j + 1));
-    }
-  }
-  return matrix;
-})();
+// 16 x 64 matrix of the first 16 non-DC DCT-II basis rows. The reference
+// computes it with the C library's cosine; no cosine is called here, because
+// a language's cosine need not agree between engines. The float32 values are
+// pinned as bit patterns, and both array views use the platform's byte order,
+// so each pattern becomes the float32 it names on any platform.
+const DCT_MATRIX = new Float32Array(Uint32Array.from(DCT_MATRIX_BITS).buffer);
 
 function lumaFromRgb(pixels: Uint8Array, count: number): Float32Array {
   const luma = new Float32Array(count);

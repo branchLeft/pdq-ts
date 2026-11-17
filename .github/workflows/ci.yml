@@ -41,6 +41,69 @@ jobs:
       - name: Build
         run: pnpm run build
 
+  # Builds the upstream C++ at the commit NOTICE names, with the strict
+  # floating-point flags in tools/build-reference.mts, and compares the port
+  # with it. Two compilers and two CPU families, because "the reference" is
+  # only one thing if they agree.
+  reference:
+    name: reference (${{ matrix.runner }}, ${{ matrix.cxx }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        cxx: [g++, clang++]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the pinned reference commit from NOTICE
+        id: pin
+        run: |
+          set -euo pipefail
+          commit="$(sed -n 's/^PROVENANCE: facebook\/ThreatExchange at \([0-9a-f]\{40\}\) .*/\1/p' NOTICE)"
+          test -n "$commit"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the reference at that commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: facebook/ThreatExchange
+          ref: ${{ steps.pin.outputs.commit }}
+          path: reference
+          sparse-checkout: pdq/cpp
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the reference drivers
+        env:
+          CXX: ${{ matrix.cxx }}
+        run: node tools/build-reference.mts --source reference --out reference-bin --cxx "$CXX"
+
+      # Unoptimised, the compiler cannot fold the cosine at compile time, so
+      # this variant takes its DCT matrix from the C library at run time.
+      - name: Build the reference drivers unoptimised
+        env:
+          CXX: ${{ matrix.cxx }}
+        run: node tools/build-reference.mts --source reference --out reference-bin --cxx "$CXX" --opt=-O0 --suffix=-O0
+
+      - name: Compare the port with the reference
+        run: pnpm run test:reference
+        env:
+          CI: true
+          PDQ_REFERENCE_BIN: reference-bin
+
   actionlint:
     runs-on: ubuntu-latest
     timeout-minutes: 5

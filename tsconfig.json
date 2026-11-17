@@ -18,6 +18,6 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src", "test"],
+  "include": ["src", "test", "tools", "*.config.mts"],
   "exclude": ["node_modules", "dist"]
 }
