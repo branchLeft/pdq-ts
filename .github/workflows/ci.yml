@@ -189,8 +189,18 @@ jobs:
           repository: facebook/ThreatExchange
           ref: ${{ steps.pin.outputs.commit }}
           path: reference
-          sparse-checkout: pdq/cpp
+          # pdq/data holds the reference's own test pictures. They are read
+          # here and never copied into this repository.
+          sparse-checkout: |
+            pdq/cpp
+            pdq/data
           persist-credentials: false
+
+      - name: Install the image libraries the reference's loader needs
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libjpeg-dev libpng-dev zlib1g-dev
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -206,7 +216,7 @@ jobs:
       - name: Build the reference drivers
         env:
           CXX: ${{ matrix.cxx }}
-        run: node tools/build-reference.mts --source reference --out reference-bin --cxx "$CXX"
+        run: node tools/build-reference.mts --source reference --out reference-bin --cxx "$CXX" --pictures
 
       # Unoptimised, the compiler cannot fold the cosine at compile time, so
       # this variant takes its DCT matrix from the C library at run time.
@@ -224,6 +234,7 @@ jobs:
         env:
           CI: true
           PDQ_REFERENCE_BIN: reference-bin
+          PDQ_REFERENCE_SOURCE: reference
           PDQ_FUZZ_SEED: ${{ inputs.fuzz_seed || github.run_id }}
           PDQ_FUZZ_CASES: ${{ inputs.fuzz_cases || (github.event_name == 'schedule' && '40000' || '4000') }}
 

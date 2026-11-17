@@ -13,9 +13,11 @@ REF="$(mktemp -d)"
 git init "$REF/src"
 git -C "$REF/src" fetch --depth 1 https://github.com/facebook/ThreatExchange.git "$(sed -n 's/^PROVENANCE: facebook\/ThreatExchange at \([0-9a-f]*\) .*/\1/p' NOTICE)"
 git -C "$REF/src" checkout FETCH_HEAD
-node tools/build-reference.mts --source "$REF/src" --out "$REF/bin"
-PDQ_REFERENCE_BIN="$REF/bin" pnpm run test:reference
+node tools/build-reference.mts --source "$REF/src" --out "$REF/bin" --pictures
+PDQ_REFERENCE_BIN="$REF/bin" PDQ_REFERENCE_SOURCE="$REF/src" pnpm run test:reference
 ```
+
+`--pictures` also builds the driver that loads picture files as the reference's own tool does. It needs the libjpeg and libpng headers (`libjpeg-dev` and `libpng-dev` on Debian and Ubuntu; with Homebrew, set `CPATH` and `LIBRARY_PATH` to its `include` and `lib`).
 
 `build-reference.mts` refuses a checkout that is not at the pinned commit. `--cxx`, `--opt` and `--suffix` build further variants into the same directory; every variant found is compared.
 
@@ -30,6 +32,8 @@ PDQ_REFERENCE_BIN="$REF/bin" pnpm run test:reference
 | `luma.ref.ts` | Luma for all 16,777,216 RGB values equals the reference's bit for bit. This stage is checked for every input that exists. |
 | `median.ref.ts` | The port's median routine equals the reference's `torben` on 900 arrays of lengths 1 to 300, with and without ties. |
 | `engine-digest.ref.ts` | One SHA-256 over every stage of 500 fuzz cases, taken from the reference's buffers, equals the committed `engine-digest.json`. Other engines must reproduce it from the port (`test/conformance/`). |
+| `pictures/reference-pictures.cpp` | Hashes picture files with the reference's whole tool path (its decode, its shrink to 512 x 512, its hashing) and writes the pixels that path hashed. |
+| `pictures.ref.ts` | For the 34 JPEG and PNG pictures in the reference's own `pdq/data` that its tool can load: the port, given those pixels, returns the tool's hash and quality and matches every stage of the reference core; and the tool as built here reproduces the eight hashes upstream publishes in `pdq/cpp/reg_test/expected/out`. The pictures are read from the upstream checkout and are not stored in this repository. |
 | `fuzz.ref.ts` | Differential fuzzing: seeded pictures from `test/helpers/fuzz-cases.ts` through the reference and the port, every stage compared bit for bit. |
 
 ## Fuzzing
