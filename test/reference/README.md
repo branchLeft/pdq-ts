@@ -25,6 +25,21 @@ PDQ_REFERENCE_BIN="$REF/bin" pnpm run test:reference
 | --- | --- |
 | `reference-dct-table.cpp` | Prints the reference's 16 x 64 DCT matrix as float32 bit patterns. |
 | `dct-table.ref.ts` | The matrix pinned in `src/dct-table.ts` equals the one each build prints, bit for bit. |
+| `reference-stages.cpp` | Runs the reference over raw pixels and writes the hash, the quality and the float32 buffers of every stage as bytes. A second mode writes luma for RGB triples. |
+| `stages.ref.ts` | For the fixed cases of `test/helpers/stage-specs.ts`: the port's 64 x 64 downsample, 16 x 64 and 16 x 16 DCT buffers, quality and hash equal the reference's bit for bit, and regenerating `test/fixtures/pdq-reference/stage-cases.json` changes nothing. |
+| `luma.ref.ts` | Luma for all 16,777,216 RGB values equals the reference's bit for bit. This stage is checked for every input that exists. |
+
+## Regenerating the recorded stages
+
+```sh
+PDQ_REFERENCE_UPDATE=1 PDQ_REFERENCE_BIN="$REF/bin" pnpm run test:reference
+```
+
+`stage-cases.json` holds, per case, the hash, the quality, all 256 DCT outputs as float32 bit patterns, and a SHA-256 of the bytes of the two larger buffers. `test/stages.test.ts` checks the port against it with no reference present, so the same comparison runs wherever the unit tests do.
+
+## The control
+
+Build the drivers with `-ffp-contract=fast` on arm64 and run this suite against them: the luma check and nearly every stage case fail, while, as `test/fixtures/pdq-reference/README.txt` records, all but one of the 24 hash-only vectors still match. A hash comparison cannot tell those two builds apart; a buffer comparison can.
 
 ## Regenerating the pinned matrix
 

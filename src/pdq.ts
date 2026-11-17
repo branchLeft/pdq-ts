@@ -18,6 +18,15 @@ export interface PdqResult {
   quality: number;
 }
 
+export interface PdqStages extends PdqResult {
+  // 64 x 64, row-major: the blurred and decimated luma.
+  downsample: Float32Array;
+  // 16 x 64: the DCT matrix applied on the left only.
+  halfDct: Float32Array;
+  // 16 x 16: the DCT output the hash bits are taken from.
+  dct: Float32Array;
+}
+
 export const HASH_BYTES = 32;
 // The reference refuses to hash anything with a side shorter than this.
 export const MIN_HASHABLE_DIM = 5;
@@ -43,7 +52,7 @@ const LUMA_B = fround(0.114);
 // so each pattern becomes the float32 it names on any platform.
 const DCT_MATRIX = new Float32Array(Uint32Array.from(DCT_MATRIX_BITS).buffer);
 
-function lumaFromRgb(pixels: Uint8Array, count: number): Float32Array {
+export function lumaFromRgb(pixels: Uint8Array, count: number): Float32Array {
   const luma = new Float32Array(count);
   for (let i = 0, p = 0; i < count; i += 1, p += 3) {
     const r = fround(LUMA_R * pixels[p]!);
@@ -182,8 +191,8 @@ function qualityOf(buffer: Float32Array): number {
   return Math.min(100, Math.trunc(sum / 90));
 }
 
-// B = D A Dt for the 16 x 16 low-frequency corner only.
-function dct64To16(buffer: Float32Array): Float32Array {
+// B = D A Dt for the 16 x 16 low-frequency corner only, with T = D A.
+function dct64To16(buffer: Float32Array): { T: Float32Array; B: Float32Array } {
   const D = DCT_MATRIX;
   const T = new Float32Array(DCT_SIDE * HASH_SIDE);
   for (let i = 0; i < DCT_SIDE; i += 1) {
@@ -205,7 +214,7 @@ function dct64To16(buffer: Float32Array): Float32Array {
       B[i * DCT_SIDE + j] = sum;
     }
   }
-  return B;
+  return { T, B };
 }
 
 // Torben Mogensen's median-without-sorting: the same loop and tie handling
@@ -283,6 +292,18 @@ export function pdqFromPixels(
   height: number,
   channels: Channels,
 ): PdqResult | null {
+  const stages = pdqStagesFromPixels(pixels, width, height, channels);
+  return stages === null ? null : { hash: stages.hash, quality: stages.quality };
+}
+
+// pdqFromPixels with the float32 buffers it passed through, for comparing
+// each stage with the reference's. Not part of the package's public entry.
+export function pdqStagesFromPixels(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  channels: Channels,
+): PdqStages | null {
   if (channels !== 1 && channels !== 3) {
     throw new RangeError('pdqFromPixels: channels must be 1 or 3');
   }
@@ -301,6 +322,6 @@ export function pdqFromPixels(
   const small =
     width === HASH_SIDE && height === HASH_SIDE ? luma : downscaleTo64(luma, height, width);
   const quality = qualityOf(small);
-  const hash = bitsToBytes(dct64To16(small));
-  return { hash, quality };
+  const { T, B } = dct64To16(small);
+  return { hash: bitsToBytes(B), quality, downsample: small, halfDct: T, dct: B };
 }
