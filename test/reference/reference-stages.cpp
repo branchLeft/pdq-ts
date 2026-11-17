@@ -11,11 +11,16 @@
 //   stdin, per record: "N\n" then N RGB triples.
 //   stdout, per record: N float32 luma values.
 //
+// reference-stages median
+//   stdin, per record: "N\n" then N float32 values.
+//   stdout, per record: the one float32 the reference's torben returns.
+//
 // Numbers are written in the machine's byte order; every supported target is
 // little-endian, and main() refuses to run on one that is not.
 #include <pdq/cpp/common/pdqhashtypes.h>
 #include <pdq/cpp/downscaling/downscaling.h>
 #include <pdq/cpp/hashing/pdqhashing.h>
+#include <pdq/cpp/hashing/torben.h>
 
 #include <cstdint>
 #include <cstdio>
@@ -106,6 +111,23 @@ int lumaMode() {
   return 0;
 }
 
+int medianMode() {
+  int n;
+  while (std::scanf("%d", &n) == 1) {
+    std::fgetc(stdin);
+    if (n < 1) {
+      return 2;
+    }
+    std::vector<float> values((size_t)n);
+    if (!readExact(values.data(), (size_t)n * sizeof(float))) {
+      return 2;
+    }
+    const float median = hashing::torben(values.data(), n);
+    writeExact(&median, sizeof median);
+  }
+  return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -122,6 +144,9 @@ int main(int argc, char** argv) {
   if (mode == "luma") {
     return lumaMode();
   }
-  std::fprintf(stderr, "usage: reference-stages hash|luma\n");
+  if (mode == "median") {
+    return medianMode();
+  }
+  std::fprintf(stderr, "usage: reference-stages hash|luma|median\n");
   return 64;
 }

@@ -57,6 +57,17 @@ export function referenceLuma(driver: string, rgb: Uint8Array, count: number): F
   return floatsAt(run(driver, 'luma', input, 4 * count), 0, count);
 }
 
+// The reference's torben median of each array, in order.
+export function referenceMedians(driver: string, arrays: readonly Float32Array[]): Float32Array {
+  const parts: Uint8Array[] = [];
+  for (const values of arrays) {
+    const bytes = Buffer.alloc(4 * values.length);
+    values.forEach((value, i) => bytes.writeFloatLE(value, 4 * i));
+    parts.push(Buffer.from(`${values.length}\n`), bytes);
+  }
+  return floatsAt(run(driver, 'median', Buffer.concat(parts), 4 * arrays.length), 0, arrays.length);
+}
+
 function bitsOf(values: Float32Array): Uint32Array {
   return new Uint32Array(values.buffer, values.byteOffset, values.length);
 }

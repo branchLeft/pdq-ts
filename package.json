@@ -21,15 +21,22 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:reference": "vitest run --config vitest.reference.config.mts",
+    "conformance:bundle": "node tools/bundle-conformance.mts",
+    "conformance:node": "node conformance-bundle/conformance.js",
+    "conformance:browsers": "node tools/conformance-in-browsers.mts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "26.6.4",
+    "@vitest/coverage-v8": "4.1.10",
+    "esbuild": "0.28.2",
     "eslint": "10.12.0",
     "globals": "17.13.0",
+    "playwright": "1.65.1",
     "sharp": "0.35.3",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.1",

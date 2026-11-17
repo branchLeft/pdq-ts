@@ -1,0 +1,6 @@
+{
+  "note": "sha256 is written by test/reference/engine-digest.ref.ts from a build of the reference. Do not edit it by hand.",
+  "seed": 20261117,
+  "cases": 500,
+  "sha256": "5821ad83b9a90a6b2a098e28250ed1629bf3858dfd49d5e0a21ff0338c0934b2"
+}

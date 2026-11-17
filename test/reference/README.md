@@ -28,6 +28,8 @@ PDQ_REFERENCE_BIN="$REF/bin" pnpm run test:reference
 | `reference-stages.cpp` | Runs the reference over raw pixels and writes the hash, the quality and the float32 buffers of every stage as bytes. A second mode writes luma for RGB triples. |
 | `stages.ref.ts` | For the fixed cases of `test/helpers/stage-specs.ts`: the port's 64 x 64 downsample, 16 x 64 and 16 x 16 DCT buffers, quality and hash equal the reference's bit for bit, and regenerating `test/fixtures/pdq-reference/stage-cases.json` changes nothing. |
 | `luma.ref.ts` | Luma for all 16,777,216 RGB values equals the reference's bit for bit. This stage is checked for every input that exists. |
+| `median.ref.ts` | The port's median routine equals the reference's `torben` on 900 arrays of lengths 1 to 300, with and without ties. |
+| `engine-digest.ref.ts` | One SHA-256 over every stage of 500 fuzz cases, taken from the reference's buffers, equals the committed `engine-digest.json`. Other engines must reproduce it from the port (`test/conformance/`). |
 | `fuzz.ref.ts` | Differential fuzzing: seeded pictures from `test/helpers/fuzz-cases.ts` through the reference and the port, every stage compared bit for bit. |
 
 ## Fuzzing

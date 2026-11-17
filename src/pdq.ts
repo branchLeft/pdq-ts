@@ -218,8 +218,9 @@ function dct64To16(buffer: Float32Array): { T: Float32Array; B: Float32Array } {
 }
 
 // Torben Mogensen's median-without-sorting: the same loop and tie handling
-// as the reference.
-function torben(values: Float32Array): number {
+// as the reference. The package only ever passes it 256 values; it is exported
+// from this module, not from the package, so tests can give it other lengths.
+export function torben(values: Float32Array): number {
   const n = values.length;
   const half = Math.floor((n + 1) / 2);
   let min = values[0]!;

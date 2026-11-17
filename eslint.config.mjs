@@ -7,7 +7,7 @@ import typescript from 'typescript-eslint';
 // used: the eslint rule set is inlined from the public packages directly.
 export default [
   {
-    ignores: ['**/dist', '**/node_modules'],
+    ignores: ['**/dist', '**/node_modules', 'conformance-bundle', 'reference', 'reference-bin'],
   },
   {
     files: ['**/*.{js,ts}'],
