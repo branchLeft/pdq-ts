@@ -4,9 +4,13 @@ This note says exactly what `pdq-ts` computes, what it is compared with, why the
 
 ## The claim
 
-> For every 8-bit grey or RGB pixel array with both sides at least 5 pixels and fewer than 2^31 pixels in all, `pdqFromPixels` returns the same 256-bit hash and the same quality as the hashing core of facebook/ThreatExchange `pdq/cpp` at the commit named in `NOTICE`, when that C++ is evaluated in IEEE-754 single precision without fused multiply-add. Every intermediate float32 value is the same too: the 64 x 64 downsample, the 16 x 64 half-transformed buffer and the 16 x 16 DCT output.
+The reference is the hashing core of facebook/ThreatExchange `pdq/cpp` at the commit named in `NOTICE`, built in IEEE-754 single precision with no fused multiply-add. The claim has three parts of different strength, and they should not be read as one.
 
-The claim rests on an argument (each floating-point operation in the reference has one counterpart in the port, rounded at the same point) and on tests that compare bit patterns against a build of the reference on every pull request. It is not a machine-checked proof.
+1. **Covered for every possible input.** Luma agrees with the reference for all 16,777,216 RGB values. The DCT matrix agrees in all 1,024 entries, and is proven to be the only matrix an accurate cosine can give.
+2. **Bit-identical on every input tested.** On every picture compared (44 fixed, 33 of upstream's own, 4,000 random per reference build per pull request), `pdqFromPixels` returns the same 256-bit hash and the same quality as the reference, and three float32 buffers are the same bit for bit: the 64 x 64 downsample, the 16 x 64 half-transformed buffer and the 16 x 16 DCT output. No difference has been observed.
+3. **Argued for all inputs.** For every 8-bit grey or RGB pixel array with both sides at least 5 pixels and fewer than 2^31 pixels in all, the same holds by the argument below: each floating-point operation in the reference has one counterpart in the port, rounded at the same point. This is a written argument. It is not a machine-checked proof, and the tests sample its conclusion; they do not establish it.
+
+Buffers that are not compared element by element: the full-size luma buffer (part 1 covers it per pixel), the full-size blurred buffers (the 4,096 samples the downsample keeps are compared), the median routine's intermediate guesses (its result is compared with the reference's on 900 arrays) and the individual terms of the quality sum (the quality is compared).
 
 ## What "the reference" means
 
@@ -76,10 +80,11 @@ The port calls no cosine. The matrix is 1,024 constants, generated from a build 
 | Luma | `test/reference/luma.ref.ts` | all 16,777,216 RGB values, bit for bit: every input this stage can receive |
 | Median | `test/reference/median.ref.ts` | 900 arrays of lengths 1 to 300 against the reference's routine |
 | 44 fixed pictures | `test/reference/stages.ref.ts`, `test/stages.test.ts` | every stage bit for bit; the committed expected values are regenerated from the reference and must not change |
-| The reference's own pictures | `test/reference/pictures.ref.ts` | 34 photographs from upstream `pdq/data`, decoded and shrunk by the reference's tool: the port returns the tool's hash and quality and matches every stage; the tool as built in CI reproduces the eight hashes upstream publishes |
+| The reference's own pictures | `test/reference/pictures.ref.ts` | 33 pictures from upstream `pdq/data` (of 35; the tool cannot load two), decoded by the reference's tool and shrunk by it to 512 x 512 where a side is longer: the port returns the tool's hash and quality and matches every stage; the tool as built in CI reproduces the eight hashes upstream publishes |
 | Fuzzing | `test/reference/fuzz.ref.ts` | 4,000 seeded pictures per build, every stage bit for bit; 40,000 nightly; sides 1 to 4096 |
-| Engines | `test/conformance/`, the `engine` and `browsers` jobs | the same bundle on Node 22, 24 and 26, Bun, Deno, Chromium, Firefox and WebKit, x64 and arm64 |
+| Engines | `test/conformance/`, the `engine` and `browsers` jobs | one bundle of six checks, with no reference present (`Math.fround` rounding, the scale factor, the matrix proof, the engine's own cosine, the 44 fixed pictures against recorded reference values, a digest over every stage of 500 random pictures taken from the reference), on Node 22 (Linux x64), Node 24 (Linux x64 and arm64), Node 26 (Linux arm64, macOS arm64), Bun and Deno (Linux x64 and arm64), and Chromium, Firefox and WebKit (Linux x64, Linux arm64, macOS arm64). The luma sweep, the median comparison, upstream's pictures and the 4,000-picture fuzz run are on Node with the reference only |
 | Coverage | `vitest.config.mts` | 100% of statements and branches of `src/` |
+| Controls | `conformance-bundle/sabotaged.js`, `vitest.coverage-control.config.mts` | on every run, each engine above is given the bundle with one matrix entry one unit in the last place away and must fail it; the coverage gate is given one unexecuted file and must fail |
 
 The fixed pictures include the smallest size, 5 x 2000 and 2000 x 5, 63 to 65 pixels either side of the 64 x 64 shortcut, 128 and 129 where the filter window steps, flat 0 and flat 255, bilevel, gradients, and a 12-megapixel picture with windows of 32 and 24.
 
@@ -108,6 +113,9 @@ The fuzzer generates sides under 5 and checks exactly the first row.
 ## Limits of the evidence
 
 - The argument is written, not machine-checked.
+- The largest pictures compared have sides of 4,096 pixels (filter windows up to 32). Larger pictures, up to the 2^31-pixel bound, are covered by the argument only.
+- Upstream's own pictures are compared after its tool has shrunk any with a side over 512 pixels to 512 x 512, so its 12-megapixel photographs reach the port as 512 x 512. The large-picture path is exercised by generated pictures only.
+- A default arm64 build of upstream, or an x64 build targeting FMA, may contract and differ. An x64 build with no FMA target has no fused instruction to use and should equal the strict build; that build was not made here.
 - The reference is compared on Linux x64 and arm64 with gcc and clang. A 32-bit x86 build that uses the x87 unit, or any build with contraction or fast-math, is a different function.
 - Engines are compared on Linux and macOS. Windows and big-endian machines are not in the matrix. Nothing in the port depends on byte order: the matrix is stored as bit patterns and both array views over them use the platform's order.
 - Fuzzing samples the input space; only luma and the DCT matrix are covered for every possible input.

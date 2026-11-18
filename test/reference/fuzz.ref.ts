@@ -34,7 +34,8 @@ const builds = driverBuilds('reference-stages').map((path) => [basename(path), p
 function fail(c: FuzzCase, what: string): never {
   throw new Error(
     `${describeCase(c)}: ${what}\n` +
-      `reproduce: PDQ_FUZZ_SEED=${c.seed} PDQ_FUZZ_ONLY=${c.index} pnpm run test:reference`,
+      `reproduce, with PDQ_REFERENCE_BIN and PDQ_REFERENCE_SOURCE set as test/reference/README.md says: ` +
+      `PDQ_FUZZ_SEED=${c.seed} PDQ_FUZZ_ONLY=${c.index} pnpm run test:reference`,
   );
 }
 

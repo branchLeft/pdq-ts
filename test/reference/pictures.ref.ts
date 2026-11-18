@@ -46,6 +46,11 @@ interface Picture {
   pixels: Uint8Array;
 }
 
+// The two upstream files the reference tool cannot hash: both have four
+// channels, and the tool exits on anything but one or three.
+const SKIPPED = ['reg-test-input/pen-and-coaster.png', 'misc-images/c.png'];
+const skipped: string[] = [];
+
 function loadPictures(): Picture[] {
   const driver = join(referenceBinDir(), 'reference-pictures');
   const run = spawnSync(driver, files, { cwd: DATA, maxBuffer: 512 * 1024 * 1024 });
@@ -60,6 +65,7 @@ function loadPictures(): Picture[] {
     const header = out.toString('latin1', at, end).split(' ');
     at = end + 1;
     if (header[0] === 'SKIP') {
+      skipped.push(file);
       continue;
     }
     const [width, height, channels, toolQuality] = [0, 1, 2, 4].map((i) => Number(header[i]));
@@ -107,8 +113,9 @@ describe("the reference's own test pictures", () => {
 
   it('are present and loaded by the reference tool', () => {
     expect(existsSync(DATA)).toBe(true);
-    expect(files.length).toBeGreaterThanOrEqual(30);
-    expect(pictures.length).toBeGreaterThanOrEqual(30);
+    expect(files).toHaveLength(35);
+    expect(skipped).toEqual(SKIPPED);
+    expect(pictures).toHaveLength(33);
   });
 
   it.each(pictures.map((p) => [p.file, p] as const))(
@@ -132,7 +139,7 @@ describe("the reference's own test pictures", () => {
 
   it('the reference tool, as built here, reproduces the hashes upstream published', () => {
     const published = publishedHashes();
-    expect(published.size).toBeGreaterThanOrEqual(8);
+    expect(published.size).toBe(8);
     const compared = pictures.filter((p) => published.has(p.file));
     expect(compared.length).toBe(published.size);
     for (const p of compared) {

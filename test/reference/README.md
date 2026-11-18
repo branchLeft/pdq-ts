@@ -33,7 +33,7 @@ PDQ_REFERENCE_BIN="$REF/bin" PDQ_REFERENCE_SOURCE="$REF/src" pnpm run test:refer
 | `median.ref.ts` | The port's median routine equals the reference's `torben` on 900 arrays of lengths 1 to 300, with and without ties. |
 | `engine-digest.ref.ts` | One SHA-256 over every stage of 500 fuzz cases, taken from the reference's buffers, equals the committed `engine-digest.json`. Other engines must reproduce it from the port (`test/conformance/`). |
 | `pictures/reference-pictures.cpp` | Hashes picture files with the reference's whole tool path (its decode, its shrink to 512 x 512, its hashing) and writes the pixels that path hashed. |
-| `pictures.ref.ts` | For the 34 JPEG and PNG pictures in the reference's own `pdq/data` that its tool can load: the port, given those pixels, returns the tool's hash and quality and matches every stage of the reference core; and the tool as built here reproduces the eight hashes upstream publishes in `pdq/cpp/reg_test/expected/out`. The pictures are read from the upstream checkout and are not stored in this repository. |
+| `pictures.ref.ts` | For the 33 JPEG and PNG pictures in the reference's own `pdq/data` that its tool can load: the port, given those pixels, returns the tool's hash and quality and matches every stage of the reference core; and the tool as built here reproduces the eight hashes upstream publishes in `pdq/cpp/reg_test/expected/out`. The pictures are read from the upstream checkout and are not stored in this repository. |
 | `fuzz.ref.ts` | Differential fuzzing: seeded pictures from `test/helpers/fuzz-cases.ts` through the reference and the port, every stage compared bit for bit. |
 
 ## Fuzzing

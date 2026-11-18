@@ -52,6 +52,11 @@ jobs:
         env:
           CI: true
 
+      # The control: with one unexecuted file added to what is measured, the
+      # same thresholds must fail.
+      - name: Control, the coverage gate fails on an uncovered file
+        run: pnpm run control:coverage
+
       - name: Build
         run: pnpm run build
 
@@ -105,6 +110,12 @@ jobs:
         if: matrix.engine == 'node'
         run: node conformance-bundle/conformance.js
 
+      # The control: the same bundle with one matrix entry one unit in the
+      # last place away must exit non-zero and name the failed check.
+      - name: Control, the sabotaged bundle fails on this Node
+        if: matrix.engine == 'node'
+        run: node tools/expect-failure.mts --needs "FAIL the pinned DCT matrix" --needs "of 6 checks passed" -- node conformance-bundle/sabotaged.js
+
       - name: Set up Bun
         if: matrix.engine == 'bun'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -114,6 +125,10 @@ jobs:
       - name: Conformance on Bun
         if: matrix.engine == 'bun'
         run: bun conformance-bundle/conformance.js
+
+      - name: Control, the sabotaged bundle fails on Bun
+        if: matrix.engine == 'bun'
+        run: node tools/expect-failure.mts --needs "FAIL the pinned DCT matrix" --needs "of 6 checks passed" -- bun conformance-bundle/sabotaged.js
 
       - name: Set up Deno
         if: matrix.engine == 'deno'
@@ -125,6 +140,10 @@ jobs:
       - name: Conformance on Deno
         if: matrix.engine == 'deno'
         run: deno run conformance-bundle/conformance.js
+
+      - name: Control, the sabotaged bundle fails on Deno
+        if: matrix.engine == 'deno'
+        run: node tools/expect-failure.mts --needs "FAIL the pinned DCT matrix" --needs "of 6 checks passed" -- deno run conformance-bundle/sabotaged.js
 
   browsers:
     name: browsers (${{ matrix.runner }})
@@ -157,6 +176,11 @@ jobs:
 
       - name: Conformance in Chromium, Firefox and WebKit
         run: pnpm run conformance:browsers chromium firefox webkit
+
+      # The control: the same bundle with one matrix entry one unit in the
+      # last place away must be reported as failed by every browser.
+      - name: Control, the sabotaged bundle fails in Chromium, Firefox and WebKit
+        run: pnpm run conformance:browsers --control chromium firefox webkit
 
   # Builds the upstream C++ at the commit NOTICE names, with the strict
   # floating-point flags in tools/build-reference.mts, and compares the port

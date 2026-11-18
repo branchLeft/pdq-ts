@@ -26,6 +26,7 @@
     "conformance:bundle": "node tools/bundle-conformance.mts",
     "conformance:node": "node conformance-bundle/conformance.js",
     "conformance:browsers": "node tools/conformance-in-browsers.mts",
+    "control:coverage": "node tools/expect-failure.mts --needs unreached.ts --needs \"does not meet\" -- node node_modules/vitest/vitest.mjs run --coverage --config vitest.coverage-control.config.mts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

@@ -10,6 +10,51 @@ const EXACT_MATH = new Set(['fround', 'floor', 'trunc', 'abs', 'min']);
 
 const SRC = join(__dirname, '..', 'src');
 
+// What a source text does that the port must not: an inexact Math member, a
+// computed member, Math passed around whole, the exponent operator, or a
+// text-to-number conversion.
+function violations(text: string): string[] {
+  const found: string[] = [];
+  for (const match of text.matchAll(/\bMath\s*(?:\??\.\s*(\w+)|\??\.?\s*\[)/g)) {
+    const member = match[1];
+    if (member === undefined) {
+      found.push('Math[computed]');
+    } else if (!EXACT_MATH.has(member)) {
+      found.push(`Math.${member}`);
+    }
+  }
+  if (/\bMath\b(?!\s*\??\.|\s*\[)/.test(text)) {
+    found.push('Math used whole');
+  }
+  if (/\*\*/.test(text)) {
+    found.push('exponent operator');
+  }
+  if (/\bparseFloat\b|\bNumber\s*\(/.test(text)) {
+    found.push('text-to-number conversion');
+  }
+  return found;
+}
+
+describe('the scan for inexact arithmetic', () => {
+  it.each([
+    ['a plain call', 'const x = Math.cos(1);', ['Math.cos']],
+    ['spacing and a line break', 'const x = Math\n  . sqrt (2);', ['Math.sqrt']],
+    ['optional chaining', 'const x = Math?.sin(1);', ['Math.sin']],
+    ['a computed member', "const x = Math['c' + 'os'](1);", ['Math[computed]']],
+    ['an alias of the whole object', 'const M = Math; M.cos(1);', ['Math used whole']],
+    ['destructuring', 'const { cos } = Math;', ['Math used whole']],
+    ['the exponent operator', 'const x = 2 ** 0.5;', ['exponent operator']],
+    ['parsing a number', "const x = parseFloat('0.1');", ['text-to-number conversion']],
+    ['an alias of one inexact member', 'const c = Math.cos;', ['Math.cos']],
+  ])('catches %s', (_name, text, expected) => {
+    expect(violations(text)).toEqual(expected);
+  });
+
+  it('accepts the exact functions, aliased or not', () => {
+    expect(violations('const f = Math.fround; Math.floor(1); Math.trunc(Math.abs(-1));')).toEqual([]);
+  });
+});
+
 describe('the shipped source', () => {
   const files = readdirSync(SRC).filter((name) => name.endsWith('.ts'));
 
@@ -17,18 +62,7 @@ describe('the shipped source', () => {
     expect(files.sort()).toEqual(['dct-table.ts', 'hash.ts', 'index.ts', 'pdq.ts']);
   });
 
-  it.each(files)('%s uses only exactly specified Math functions', (name) => {
-    const text = readFileSync(join(SRC, name), 'utf8');
-    const used = [...text.matchAll(/\bMath\s*(?:\.\s*(\w+)|\[)/g)].map((m) => m[1] ?? 'computed');
-    expect(used.filter((member) => !EXACT_MATH.has(member))).toEqual([]);
-    // Math must not be aliased or destructured, or the scan above is blind.
-    const bare = [...text.matchAll(/\bMath\b(?!\s*\.)/g)];
-    expect(bare).toHaveLength(0);
-  });
-
-  it.each(files)('%s has no exponent operator and no other numeric library call', (name) => {
-    const text = readFileSync(join(SRC, name), 'utf8');
-    expect(text).not.toMatch(/\*\*/);
-    expect(text).not.toMatch(/\bparseFloat\b|\bNumber\s*\(/);
+  it.each(files)('%s does no inexact arithmetic', (name) => {
+    expect(violations(readFileSync(join(SRC, name), 'utf8'))).toEqual([]);
   });
 });

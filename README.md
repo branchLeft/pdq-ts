@@ -30,14 +30,26 @@ Not published. The package is marked `private` until the release step.
 
 `pdqFromPixels` implements the pixel-to-hash stage of PDQ: luma, the two-pass box-filter downsample to 64 x 64, the quality metric, the 64-to-16 DCT and the median threshold.
 
-For every 8-bit grey or RGB pixel array with both sides at least 5 pixels and fewer than 2^31 pixels in all, it returns the same 256-bit hash and the same quality as the hashing core of facebook/ThreatExchange `pdq/cpp` at the commit above, when that C++ is evaluated in IEEE-754 single precision without fused multiply-add (`-ffp-contract=off`, no fast-math). Every intermediate float32 value is the same as well.
+"The reference" below means the hashing core of facebook/ThreatExchange `pdq/cpp` at the commit above, built in IEEE-754 single precision with no fused multiply-add (`-ffp-contract=off`, no fast-math).
 
-How that is known:
+What has been shown, in three strengths:
 
-- Each floating-point operation in the reference has one counterpart in the port, rounded to single precision at the same point. [docs/equivalence.md](docs/equivalence.md) gives the argument stage by stage.
-- The DCT matrix is a table of constants, not a call to a cosine, and a test proves that any accurate cosine gives exactly that table.
-- On every pull request CI builds the reference with gcc and clang on x64 and arm64 and compares bit patterns, not just hashes: the DCT matrix, luma for all 16,777,216 RGB values, every stage of 44 fixed pictures, and every stage of 4,000 seeded random pictures per build (40,000 nightly).
-- The same checks run on Node 22, 24 and 26, Bun, Deno, Chromium, Firefox and WebKit, on x64 and arm64.
+| Strength | What |
+| --- | --- |
+| Covered for every possible input | Luma: all 16,777,216 RGB values compared with the reference bit for bit. The DCT matrix: all 1,024 entries compared bit for bit, and a test proves that any accurate cosine gives exactly that table. |
+| Bit-identical on every input tested | Hash, quality and three float32 buffers (the 64 x 64 downsample, the 16 x 64 half-transformed buffer, the 16 x 16 DCT output) against a build of the reference, on 44 fixed pictures, 33 of upstream's own test pictures after its tool has decoded and shrunk them, and 4,000 seeded random pictures per build on each pull request (40,000 nightly). No difference has been observed. |
+| Argued, not machine-checked | For all 8-bit grey or RGB arrays with both sides at least 5 pixels and fewer than 2^31 pixels: each floating-point operation in the reference has one counterpart in the port, rounded to single precision at the same point. [docs/equivalence.md](docs/equivalence.md) gives the argument stage by stage. It is a written argument; no tool has verified it. |
+
+Not compared element by element: the full-size luma and blurred buffers (luma is covered per pixel instead; of the blurred buffer, the 4,096 samples the downsample keeps are compared), and the individual terms of the quality sum (the quality itself is compared).
+
+Where each check runs:
+
+| Check | Runs on |
+| --- | --- |
+| Everything above, against a build of the reference | Node 26 on Linux, with the reference built by gcc and by clang, on x64 and on arm64, at `-O2` and `-O0` |
+| A smaller bundle with no reference present: `Math.fround` rounding, the DCT-matrix proof, the 44 fixed pictures against recorded reference values, and one digest over every stage of 500 random pictures, taken from the reference | Node 22 (Linux x64), Node 24 (Linux x64 and arm64), Node 26 (Linux arm64, macOS arm64); Bun and Deno (Linux x64 and arm64); Chromium, Firefox and WebKit (Linux x64, Linux arm64, macOS arm64) |
+
+The exhaustive luma comparison, the reference's own pictures and the 4,000-picture fuzz run do not run on Bun, Deno or the browsers. Each of those engines is also given a deliberately wrong bundle on every run and must fail it.
 
 What it does not do:
 

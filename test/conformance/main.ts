@@ -11,7 +11,7 @@ export interface ConformanceReport {
 }
 
 interface EngineGlobals {
-  Deno?: { version?: { deno?: string } };
+  Deno?: { version?: { deno?: string }; build?: { arch?: string } };
   Bun?: { version?: string };
   process?: { versions?: { node?: string; v8?: string }; arch?: string };
   navigator?: { userAgent?: string };
@@ -23,7 +23,7 @@ const engineGlobals = globalThis as EngineGlobals;
 function engineName(): string {
   const { Deno, Bun, process: proc, navigator: nav } = engineGlobals;
   if (Deno?.version?.deno !== undefined) {
-    return `Deno ${Deno.version.deno}`;
+    return `Deno ${Deno.version.deno} (${Deno.build?.arch ?? "unknown arch"})`;
   }
   if (Bun?.version !== undefined) {
     return `Bun ${Bun.version} (${proc?.arch ?? 'unknown arch'})`;
