@@ -4,6 +4,19 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Nightly: the same jobs with a longer fuzz run and a new seed.
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzz_seed:
+        description: Fuzz seed (empty means this run's id)
+        required: false
+        type: string
+      fuzz_cases:
+        description: Fuzz cases per reference build
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -33,13 +46,221 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
-      - name: Unit tests
+      # Fails below 100% of statements, branches, functions and lines of src/.
+      - name: Unit tests with the coverage gate
+        run: pnpm run test:coverage
+        env:
+          CI: true
+
+      # The control: with one unexecuted file added to what is measured, the
+      # same thresholds must fail.
+      - name: Control, the coverage gate fails on an uncovered file
+        run: pnpm run control:coverage
+
+      - name: Build
+        run: pnpm run build
+
+  # The conformance bundle is one standard module holding the port and the
+  # reference's recorded values. Each engine below runs that same file and
+  # must reproduce every bit of every stage. Node engines run the unit suite
+  # as well.
+  engine:
+    name: engine (${{ matrix.engine }} ${{ matrix.version }}, ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { engine: node, version: '22', runner: ubuntu-24.04 }
+          - { engine: node, version: '24', runner: ubuntu-24.04 }
+          - { engine: node, version: '24', runner: ubuntu-24.04-arm }
+          - { engine: node, version: '26', runner: ubuntu-24.04-arm }
+          - { engine: node, version: '26', runner: macos-latest }
+          - { engine: bun, version: latest, runner: ubuntu-24.04 }
+          - { engine: bun, version: latest, runner: ubuntu-24.04-arm }
+          - { engine: deno, version: v2.x, runner: ubuntu-24.04 }
+          - { engine: deno, version: v2.x, runner: ubuntu-24.04-arm }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.engine == 'node' && matrix.version || '' }}
+          node-version-file: ${{ matrix.engine != 'node' && '.nvmrc' || '' }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bundle the conformance checks
+        run: pnpm run conformance:bundle
+
+      - name: Unit suite on this Node
+        if: matrix.engine == 'node'
         run: pnpm run test
         env:
           CI: true
 
-      - name: Build
-        run: pnpm run build
+      - name: Conformance on this Node
+        if: matrix.engine == 'node'
+        run: node conformance-bundle/conformance.js
+
+      # The control: the same bundle with one matrix entry one unit in the
+      # last place away must exit non-zero and name the failed check.
+      - name: Control, the sabotaged bundle fails on this Node
+        if: matrix.engine == 'node'
+        run: node tools/expect-failure.mts --needs "FAIL the pinned DCT matrix" --needs "of 6 checks passed" -- node conformance-bundle/sabotaged.js
+
+      - name: Set up Bun
+        if: matrix.engine == 'bun'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ matrix.version }}
+
+      - name: Conformance on Bun
+        if: matrix.engine == 'bun'
+        run: bun conformance-bundle/conformance.js
+
+      - name: Control, the sabotaged bundle fails on Bun
+        if: matrix.engine == 'bun'
+        run: node tools/expect-failure.mts --needs "FAIL the pinned DCT matrix" --needs "of 6 checks passed" -- bun conformance-bundle/sabotaged.js
+
+      - name: Set up Deno
+        if: matrix.engine == 'deno'
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: ${{ matrix.version }}
+
+      # No permission flag: the checks touch no file, network or environment.
+      - name: Conformance on Deno
+        if: matrix.engine == 'deno'
+        run: deno run conformance-bundle/conformance.js
+
+      - name: Control, the sabotaged bundle fails on Deno
+        if: matrix.engine == 'deno'
+        run: node tools/expect-failure.mts --needs "FAIL the pinned DCT matrix" --needs "of 6 checks passed" -- deno run conformance-bundle/sabotaged.js
+
+  browsers:
+    name: browsers (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium, Firefox and WebKit
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      - name: Bundle the conformance checks
+        run: pnpm run conformance:bundle
+
+      - name: Conformance in Chromium, Firefox and WebKit
+        run: pnpm run conformance:browsers chromium firefox webkit
+
+      # The control: the same bundle with one matrix entry one unit in the
+      # last place away must be reported as failed by every browser.
+      - name: Control, the sabotaged bundle fails in Chromium, Firefox and WebKit
+        run: pnpm run conformance:browsers --control chromium firefox webkit
+
+  # Builds the upstream C++ at the commit NOTICE names, with the strict
+  # floating-point flags in tools/build-reference.mts, and compares the port
+  # with it. Two compilers and two CPU families, because "the reference" is
+  # only one thing if they agree.
+  reference:
+    name: reference (${{ matrix.runner }}, ${{ matrix.cxx }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        cxx: [g++, clang++]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the pinned reference commit from NOTICE
+        id: pin
+        run: |
+          set -euo pipefail
+          commit="$(sed -n 's/^PROVENANCE: facebook\/ThreatExchange at \([0-9a-f]\{40\}\) .*/\1/p' NOTICE)"
+          test -n "$commit"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the reference at that commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: facebook/ThreatExchange
+          ref: ${{ steps.pin.outputs.commit }}
+          path: reference
+          # pdq/data holds the reference's own test pictures. They are read
+          # here and never copied into this repository.
+          sparse-checkout: |
+            pdq/cpp
+            pdq/data
+          persist-credentials: false
+
+      - name: Install the image libraries the reference's loader needs
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libjpeg-dev libpng-dev zlib1g-dev
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the reference drivers
+        env:
+          CXX: ${{ matrix.cxx }}
+        run: node tools/build-reference.mts --source reference --out reference-bin --cxx "$CXX" --pictures
+
+      # Unoptimised, the compiler cannot fold the cosine at compile time, so
+      # this variant takes its DCT matrix from the C library at run time.
+      - name: Build the reference drivers unoptimised
+        env:
+          CXX: ${{ matrix.cxx }}
+        run: node tools/build-reference.mts --source reference --out reference-bin --cxx "$CXX" --opt=-O0 --suffix=-O0
+
+      # The fuzz seed is this run's id unless one is given, so every run tries
+      # new pictures and a rerun of the same run tries the same ones. The
+      # seed is printed, and a failure prints the command that rebuilds its
+      # one case.
+      - name: Compare the port with the reference
+        run: pnpm run test:reference
+        env:
+          CI: true
+          PDQ_REFERENCE_BIN: reference-bin
+          PDQ_REFERENCE_SOURCE: reference
+          PDQ_FUZZ_SEED: ${{ inputs.fuzz_seed || github.run_id }}
+          PDQ_FUZZ_CASES: ${{ inputs.fuzz_cases || (github.event_name == 'schedule' && '40000' || '4000') }}
 
   actionlint:
     runs-on: ubuntu-latest

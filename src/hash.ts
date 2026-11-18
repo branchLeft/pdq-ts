@@ -41,14 +41,16 @@ export function toHex(hash: Uint8Array): string {
 export function toBase64(hash: Uint8Array): string {
   assertHash(hash, 'toBase64');
   let text = '';
+  // 32 bytes are ten groups of three and one group of two, so every group
+  // has its second byte and only the last lacks its third.
   for (let i = 0; i < HASH_BYTES; i += 3) {
     const b0 = hash[i]!;
-    const b1 = i + 1 < HASH_BYTES ? hash[i + 1]! : 0;
+    const b1 = hash[i + 1]!;
     const b2 = i + 2 < HASH_BYTES ? hash[i + 2]! : 0;
     const group = (b0 << 16) | (b1 << 8) | b2;
     text += BASE64_ALPHABET[(group >> 18) & 63]!;
     text += BASE64_ALPHABET[(group >> 12) & 63]!;
-    text += i + 1 < HASH_BYTES ? BASE64_ALPHABET[(group >> 6) & 63]! : '=';
+    text += BASE64_ALPHABET[(group >> 6) & 63]!;
     text += i + 2 < HASH_BYTES ? BASE64_ALPHABET[group & 63]! : '=';
   }
   return text;

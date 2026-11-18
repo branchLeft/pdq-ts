@@ -9,11 +9,22 @@
 // BSD licence, reproduced in NOTICE at the root of this package. The torben
 // median routine is public domain (Torben Mogensen; N. Devillard).
 
+import { DCT_MATRIX_BITS } from './dct-table.js';
+
 export type Channels = 1 | 3;
 
 export interface PdqResult {
   hash: Uint8Array;
   quality: number;
+}
+
+export interface PdqStages extends PdqResult {
+  // 64 x 64, row-major: the blurred and decimated luma.
+  downsample: Float32Array;
+  // 16 x 64: the DCT matrix applied on the left only.
+  halfDct: Float32Array;
+  // 16 x 16: the DCT output the hash bits are taken from.
+  dct: Float32Array;
 }
 
 export const HASH_BYTES = 32;
@@ -34,21 +45,14 @@ const LUMA_R = fround(0.299);
 const LUMA_G = fround(0.587);
 const LUMA_B = fround(0.114);
 
-// 16 x 64 matrix of the first 16 non-DC DCT-II basis rows, as the reference
-// builds it: scale in float, cosine in double, stored as float.
-const DCT_MATRIX = ((): Float32Array => {
-  const scale = fround(Math.sqrt(2.0 / HASH_SIDE));
-  const matrix = new Float32Array(DCT_SIDE * HASH_SIDE);
-  for (let i = 0; i < DCT_SIDE; i += 1) {
-    for (let j = 0; j < HASH_SIDE; j += 1) {
-      matrix[i * HASH_SIDE + j] =
-        scale * Math.cos((Math.PI / 2.0 / HASH_SIDE) * (i + 1) * (2 * j + 1));
-    }
-  }
-  return matrix;
-})();
+// 16 x 64 matrix of the first 16 non-DC DCT-II basis rows. The reference
+// computes it with the C library's cosine; no cosine is called here, because
+// a language's cosine need not agree between engines. The float32 values are
+// pinned as bit patterns, and both array views use the platform's byte order,
+// so each pattern becomes the float32 it names on any platform.
+const DCT_MATRIX = new Float32Array(Uint32Array.from(DCT_MATRIX_BITS).buffer);
 
-function lumaFromRgb(pixels: Uint8Array, count: number): Float32Array {
+export function lumaFromRgb(pixels: Uint8Array, count: number): Float32Array {
   const luma = new Float32Array(count);
   for (let i = 0, p = 0; i < count; i += 1, p += 3) {
     const r = fround(LUMA_R * pixels[p]!);
@@ -187,8 +191,8 @@ function qualityOf(buffer: Float32Array): number {
   return Math.min(100, Math.trunc(sum / 90));
 }
 
-// B = D A Dt for the 16 x 16 low-frequency corner only.
-function dct64To16(buffer: Float32Array): Float32Array {
+// B = D A Dt for the 16 x 16 low-frequency corner only, with T = D A.
+function dct64To16(buffer: Float32Array): { T: Float32Array; B: Float32Array } {
   const D = DCT_MATRIX;
   const T = new Float32Array(DCT_SIDE * HASH_SIDE);
   for (let i = 0; i < DCT_SIDE; i += 1) {
@@ -210,12 +214,13 @@ function dct64To16(buffer: Float32Array): Float32Array {
       B[i * DCT_SIDE + j] = sum;
     }
   }
-  return B;
+  return { T, B };
 }
 
 // Torben Mogensen's median-without-sorting: the same loop and tie handling
-// as the reference.
-function torben(values: Float32Array): number {
+// as the reference. The package only ever passes it 256 values; it is exported
+// from this module, not from the package, so tests can give it other lengths.
+export function torben(values: Float32Array): number {
   const n = values.length;
   const half = Math.floor((n + 1) / 2);
   let min = values[0]!;
@@ -288,6 +293,18 @@ export function pdqFromPixels(
   height: number,
   channels: Channels,
 ): PdqResult | null {
+  const stages = pdqStagesFromPixels(pixels, width, height, channels);
+  return stages === null ? null : { hash: stages.hash, quality: stages.quality };
+}
+
+// pdqFromPixels with the float32 buffers it passed through, for comparing
+// each stage with the reference's. Not part of the package's public entry.
+export function pdqStagesFromPixels(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  channels: Channels,
+): PdqStages | null {
   if (channels !== 1 && channels !== 3) {
     throw new RangeError('pdqFromPixels: channels must be 1 or 3');
   }
@@ -306,6 +323,6 @@ export function pdqFromPixels(
   const small =
     width === HASH_SIDE && height === HASH_SIDE ? luma : downscaleTo64(luma, height, width);
   const quality = qualityOf(small);
-  const hash = bitsToBytes(dct64To16(small));
-  return { hash, quality };
+  const { T, B } = dct64To16(small);
+  return { hash: bitsToBytes(B), quality, downsample: small, halfDct: T, dct: B };
 }
