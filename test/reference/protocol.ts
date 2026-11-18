@@ -18,7 +18,10 @@ function run(driver: string, mode: string, input: Uint8Array, expectedBytes: num
     throw new Error(`${driver} ${mode} exited ${String(result.status)}: ${result.stderr.toString()}`);
   }
   if (result.stdout.length !== expectedBytes) {
-    throw new Error(`${driver} ${mode} wrote ${result.stdout.length} bytes, not ${expectedBytes}`);
+    throw new Error(
+      `${driver} ${mode} wrote ${result.stdout.length} bytes, not ${expectedBytes}` +
+        ` (exit ${String(result.status)}, signal ${String(result.signal)}, stderr: ${result.stderr.toString()})`,
+    );
   }
   return result.stdout;
 }

@@ -22,6 +22,7 @@
 #include <pdq/cpp/hashing/pdqhashing.h>
 #include <pdq/cpp/hashing/torben.h>
 
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -41,6 +42,21 @@ void writeExact(const void* from, size_t bytes) {
   if (bytes != 0 && std::fwrite(from, 1, bytes, stdout) != bytes) {
     std::exit(3);
   }
+}
+
+// A record loop ends when the next header does not parse. That is a clean
+// finish only at the end of the input; a read error, or text that is not a
+// header, must not look like one, or a short output passes for a whole one.
+int endOfInput() {
+  if (std::ferror(stdin)) {
+    std::fprintf(stderr, "stdin read error: %s\n", std::strerror(errno));
+    return 7;
+  }
+  if (!std::feof(stdin)) {
+    std::fprintf(stderr, "stdin holds something that is not a record header\n");
+    return 8;
+  }
+  return 0;
 }
 
 int hashMode() {
@@ -81,7 +97,7 @@ int hashMode() {
     writeExact(b1664, sizeof b1664);
     writeExact(b1616, sizeof b1616);
   }
-  return 0;
+  return endOfInput();
 }
 
 int lumaMode() {
@@ -108,7 +124,7 @@ int lumaMode() {
     }
     writeExact(luma.data(), (size_t)n * sizeof(float));
   }
-  return 0;
+  return endOfInput();
 }
 
 int medianMode() {
@@ -125,7 +141,7 @@ int medianMode() {
     const float median = hashing::torben(values.data(), n);
     writeExact(&median, sizeof median);
   }
-  return 0;
+  return endOfInput();
 }
 
 } // namespace
